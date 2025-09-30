@@ -1,75 +1,60 @@
-import { useEffect } from "react";
-import {
-  Viewer,
-  Ion,
-  createWorldTerrainAsync,
-  Cartesian3,
-  Math as CesiumMath,
-  createOsmBuildingsAsync,
-  ParticleSystem,
-  Color,
-  CircleEmitter,
-  Matrix4,
-  Cartesian2
-} from "cesium";
+import { useEffect, useRef } from "react";
+import { globalParams, initFire, initViewer } from "../lib/cesium-fire";
+import { motion } from "framer-motion";
 
 export default function CesiumViewer() {
-  useEffect(() => {
-    Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
+  const containerRef = useRef(null);
 
-    let viewer: Viewer;
+  useEffect(() => {
+    let mounted = true;
 
     (async () => {
-      viewer = new Viewer("cesiumContainer", {
-        terrainProvider: await createWorldTerrainAsync(),
-      });
-
-      const scene = viewer.scene;
-
-      // Sistema de partículas (humo)
-      scene.primitives.add(
-        new ParticleSystem({
-          image: "./smoke.png",
-          startColor: Color.GRAY.withAlpha(0.6),
-          endColor: Color.WHITE.withAlpha(0.0),
-          startScale: 5.0,
-          endScale: 20.0,
-          minimumParticleLife: 1.5,
-          maximumParticleLife: 3.0,
-          minimumSpeed: 1.0,
-          maximumSpeed: 3.0,
-          imageSize: new Cartesian2(30, 30),
-          emissionRate: 20.0,
-          lifetime: 16.0,
-          emitter: new CircleEmitter(2.0),
-          emitterModelMatrix: Matrix4.fromTranslation(
-            Cartesian3.fromDegrees(-122.4175, 37.655, 0)
-          ),
-        })
-      );
-
-      // FlyTo a San Francisco
-      viewer.camera.flyTo({
-        destination: Cartesian3.fromDegrees(-122.4175, 37.655, 400),
-        orientation: {
-          heading: CesiumMath.toRadians(0.0),
-          pitch: CesiumMath.toRadians(-15.0),
-        },
-      });
-
-      // Cargar edificios OSM
-      const buildingTileset = await createOsmBuildingsAsync();
-      if (!viewer.isDestroyed()) {
-        scene.primitives.add(buildingTileset);
+      try {
+        await initViewer("cesiumContainer");
+      } catch (err) {
+        console.error("Error inicializando Cesium:", err);
       }
     })();
 
     return () => {
-      if (viewer && !viewer.isDestroyed()) {
-        viewer.destroy();
+      try {
+        initFire();
+      } catch (e) {
+        console.warn("initFire error:", e);
       }
+
+      if (globalParams.viewer && !globalParams.viewer.isDestroyed()) {
+        globalParams.viewer.destroy();
+      }
+      mounted = false;
     };
   }, []);
 
-  return <div id="cesiumContainer" style={{ width: "100%", height: "100vh" }} />;
+  return (
+    <div
+      ref={containerRef}
+      id="cesiumContainer"
+      className="relative w-full h-full bg-gradient-to-br from-gray-900 via-gray-800 to-black shadow-2xl rounded-xl overflow-hidden border border-gray-700"
+    >
+      {/* Overlay para branding */}
+      <div className="absolute top-4 left-4 bg-black/60 text-white text-sm px-3 py-1 rounded-md backdrop-blur-md shadow-lg">
+        🌍 Cesium Viewer
+      </div>
+
+      {/* Loader elegante */}
+      <motion.div
+        initial={{ opacity: 1 }}
+        animate={{ opacity: 0 }}
+        transition={{ delay: 1.5, duration: 0.6 }}
+        className="absolute inset-0 flex items-center justify-center text-white text-lg font-semibold bg-black/50 backdrop-blur-sm"
+      >
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+          className="w-8 h-8 border-4 border-white border-t-transparent rounded-full"
+        />
+        <span className="ml-3">Cargando mapa...</span>
+      </motion.div>
+    </div>
+  );
 }
