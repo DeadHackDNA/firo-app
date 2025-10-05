@@ -1,6 +1,6 @@
 import * as Cesium from "cesium";
-import { getFireLocations } from "../api/getFireLocations.ts";
-import { getPrediction, type RequestBody } from "../api/getPrediction.ts";
+import {getFireLocations} from "../api/getFireLocations.ts";
+import {getPrediction, type RequestBody} from "../api/getPrediction.ts";
 
 export const globalParams: {
     viewer?: Cesium.Viewer;
@@ -38,8 +38,8 @@ function addFirePoint(viewer: Cesium.Viewer, lon: number, lat: number, color: Ce
     globalParams.wildFirePoints.push(pointEntity);
 }
 
-export const initViewer = async (viewerId: string): Promise<Cesium.Viewer | undefined> => {
-    Cesium.Ion.defaultAccessToken = (import.meta as any).env?.VITE_CESIUM_TOKEN ?? "";
+export const initViewer = async (viewerId: string, dateRange:string): Promise<Cesium.Viewer | undefined> => {
+    Cesium.Ion.defaultAccessToken = (import.meta).env?.VITE_CESIUM_TOKEN ?? "";
 
     const viewer = new Cesium.Viewer(viewerId, {
         baseLayerPicker: false,
@@ -66,7 +66,7 @@ export const initViewer = async (viewerId: string): Promise<Cesium.Viewer | unde
     viewer.camera.changed.addEventListener(() => {
         clearTimeout((viewer as any)._fireTimeout);
         (viewer as any)._fireTimeout = setTimeout(() => {
-            trackCamera(viewer);
+            trackCamera(viewer, dateRange);
         }, 2000);
     });
     addParticleFire();
@@ -84,7 +84,7 @@ export const initViewer = async (viewerId: string): Promise<Cesium.Viewer | unde
 let lastCameraPosition: Cesium.Cartesian3 | null = null;
 let lastFetchAbort: AbortController | null = null;
 
-async function trackCamera(viewer: Cesium.Viewer) {
+async function trackCamera(viewer: Cesium.Viewer, dateRange: string) {
     const scene = viewer.scene;
     const camera = viewer.camera;
     const globe = scene.globe;
@@ -110,23 +110,18 @@ async function trackCamera(viewer: Cesium.Viewer) {
     );
     if (!topLeft || !bottomRight) return;
 
-    const topLeftCarto = Cesium.Cartographic.fromCartesian(topLeft);
-    const bottomRightCarto = Cesium.Cartographic.fromCartesian(bottomRight);
+    const topLeftCarton = Cesium.Cartographic.fromCartesian(topLeft);
+    const bottomRightCarton = Cesium.Cartographic.fromCartesian(bottomRight);
 
-    const north = Cesium.Math.toDegrees(topLeftCarto.latitude);
-    const west = Cesium.Math.toDegrees(topLeftCarto.longitude);
-    const south = Cesium.Math.toDegrees(bottomRightCarto.latitude);
-    const east = Cesium.Math.toDegrees(bottomRightCarto.longitude);
+    const north = Cesium.Math.toDegrees(topLeftCarton.latitude);
+    const west = Cesium.Math.toDegrees(topLeftCarton.longitude);
+    const south = Cesium.Math.toDegrees(bottomRightCarton.latitude);
+    const east = Cesium.Math.toDegrees(bottomRightCarton.longitude);
 
-    const requestBody = {
-        start: "2025-01-01",
-        end: "2025-02-10",
-        minLat: south,
-        maxLat: north,
-        minLon: west,
-        maxLon: east,
-        limit: 100, // request only up to 100
-    };
+    const requestBody =
+        buildFireLocationsRequestBody(dateRange, south, north, west, east);
+
+    console.log("Requesting fires within:", requestBody);
 
     const predictionRequestBody: RequestBody = {
         bbox_corners: {
@@ -148,9 +143,9 @@ async function trackCamera(viewer: Cesium.Viewer) {
         for (const fire of fireLocations) {
             const exists = globalParams.wildFireCollection.some((pf) => {
                 const pos = Cesium.Matrix4.getTranslation(pf.modelMatrix, new Cesium.Cartesian3());
-                const carto = Cesium.Cartographic.fromCartesian(pos);
-                const lon = Cesium.Math.toDegrees(carto.longitude);
-                const lat = Cesium.Math.toDegrees(carto.latitude);
+                const carton = Cesium.Cartographic.fromCartesian(pos);
+                const lon = Cesium.Math.toDegrees(carton.longitude);
+                const lat = Cesium.Math.toDegrees(carton.latitude);
                 return (
                     Math.abs(lon - fire.longitude) < 0.0001 &&
                     Math.abs(lat - fire.latitude) < 0.0001
@@ -173,9 +168,9 @@ async function trackCamera(viewer: Cesium.Viewer) {
         for (const fire of predictions.detailed_predictions) {
             const exists = globalParams.wildFireCollection.some((pf) => {
                 const pos = Cesium.Matrix4.getTranslation(pf.modelMatrix, new Cesium.Cartesian3());
-                const carto = Cesium.Cartographic.fromCartesian(pos);
-                const lon = Cesium.Math.toDegrees(carto.longitude);
-                const lat = Cesium.Math.toDegrees(carto.latitude);
+                const carton = Cesium.Cartographic.fromCartesian(pos);
+                const lon = Cesium.Math.toDegrees(carton.longitude);
+                const lat = Cesium.Math.toDegrees(carton.latitude);
                 return (
                     Math.abs(lon - fire.longitude) < 0.0001 &&
                     Math.abs(lat - fire.latitude) < 0.0001
@@ -196,8 +191,8 @@ async function trackCamera(viewer: Cesium.Viewer) {
         }
 
         console.log(`🔥 Active fires: ${globalParams.wildFireCollection.length}`);
-    } catch (err: any) {
-        if (err.name === "AbortError") {
+    } catch (error) {
+        if (error.name === "AbortError") {
             // ignored because it means a new request started
             return;
         }
@@ -304,14 +299,14 @@ function adjustFireVisibility(viewer: Cesium.Viewer, color: Cesium.Color = Cesiu
     if (!globalParams.viewer) return;
 
     const cameraPosition = viewer.camera.positionWC;
-    const carto = Cesium.Cartographic.fromCartesian(cameraPosition);
-    const terrainHeight = viewer.scene.globe.getHeight(carto);
-    const cameraHeightAboveGround = carto.height - (terrainHeight ?? 0);
+    const carton = Cesium.Cartographic.fromCartesian(cameraPosition);
+    const terrainHeight = viewer.scene.globe.getHeight(carton);
+    const cameraHeightAboveGround = carton.height - (terrainHeight ?? 0);
 
     const maxCameraHeight = 5000; // hide fire if too high
     const maxDistance = 5000;     // hide fire if too far
 
-    clearFirePoints(viewer); // limpia puntos previos
+    clearFirePoints(viewer);
 
     for (const fire of globalParams.wildFireCollection) {
         const firePos = Cesium.Matrix4.getTranslation(fire.modelMatrix, new Cesium.Cartesian3());
@@ -320,10 +315,9 @@ function adjustFireVisibility(viewer: Cesium.Viewer, color: Cesium.Color = Cesiu
         const visible = !(distance > maxDistance || cameraHeightAboveGround > maxCameraHeight);
         fire.show = visible;
 
-        // convertir posición a coordenadas geográficas
-        const cartoFire = Cesium.Cartographic.fromCartesian(firePos);
-        const lon = Cesium.Math.toDegrees(cartoFire.longitude);
-        const lat = Cesium.Math.toDegrees(cartoFire.latitude);
+        const cartonFire = Cesium.Cartographic.fromCartesian(firePos);
+        const lon = Cesium.Math.toDegrees(cartonFire.longitude);
+        const lat = Cesium.Math.toDegrees(cartonFire.latitude);
 
         if (!visible) {
             addFirePoint(viewer, lon, lat, color);
@@ -333,7 +327,54 @@ function adjustFireVisibility(viewer: Cesium.Viewer, color: Cesium.Color = Cesiu
     for (const smoke of globalParams.smokeCollection) {
         const smokePos = Cesium.Matrix4.getTranslation(smoke.modelMatrix, new Cesium.Cartesian3());
         const distance = Cesium.Cartesian3.distance(cameraPosition, smokePos);
-        const visible = !(distance > maxDistance || cameraHeightAboveGround > maxCameraHeight);
-        smoke.show = visible;
+        smoke.show = !(distance > maxDistance || cameraHeightAboveGround > maxCameraHeight);
     }
+}
+
+function buildFireLocationsRequestBody(
+    dateRange: string,
+    south: number,
+    north: number,
+    west: number,
+    east: number
+) {
+    const getISODate = (daysAgo: number) => {
+        const date = new Date();
+        date.setDate(date.getDate() - daysAgo);
+        return date.toISOString();
+    };
+
+    let start: string;
+    let end: string;
+
+    switch (dateRange) {
+        case "24h":
+            start = getISODate(1);
+            end = getISODate(0);
+            break;
+        case "7d":
+            start = getISODate(7);
+            end = getISODate(0);
+            break;
+        case "30d":
+            start = getISODate(30);
+            end = getISODate(0);
+            break;
+        case "custom":
+            start = "2023-10-01T00:00:00Z";
+            end = "2023-10-31T23:59:59Z";
+            break;
+        default:
+            start = getISODate(1);
+            end = getISODate(0);
+    }
+    return {
+        start,
+        end,
+        minLat: south,
+        maxLat: north,
+        minLon: west,
+        maxLon: east,
+        limit: 100,
+    };
 }
