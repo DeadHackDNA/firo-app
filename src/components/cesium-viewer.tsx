@@ -1,14 +1,18 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { globalParams, initFire, initViewer } from "../lib/cesium-fire";
 import { motion } from "framer-motion";
 
 export default function CesiumViewer() {
-  const containerRef = useRef(null);
+    const [itsMounted, setItsMounted] = useState(false);
+
+    useEffect(() => {
+        setItsMounted(true);
+    }, []);
 
   useEffect(() => {
-
       (async () => {
           try {
+              if (!itsMounted) return;
               await initViewer("cesiumContainer");
           } catch (err) {
               console.error("Error initializing Cesium:", err);
@@ -25,11 +29,10 @@ export default function CesiumViewer() {
               globalParams.viewer.destroy();
           }
       };
-  }, []);
+  }, [itsMounted]);
 
   return (
     <div
-      ref={containerRef}
       id="cesiumContainer"
       className="relative w-full h-full bg-gradient-to-br from-gray-900 via-gray-800 to-black shadow-2xl rounded-xl overflow-hidden border border-gray-700"
     >
