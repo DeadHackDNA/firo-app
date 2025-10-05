@@ -1,7 +1,7 @@
 import type { PredictionResponse } from "./models/prediction.models.ts";
 import httpClient from "./http-ia-client.ts";
 
-interface RequestBody {
+export interface RequestBody {
     bbox_corners: {
         top_left: number[],
         bottom_right: number[]
@@ -11,9 +11,9 @@ interface RequestBody {
 
 export async function getPrediction(requestBody: RequestBody): Promise<PredictionResponse> {
     try {
-        const response = await httpClient.post<PredictionResponse>("/predict", requestBody);
+        const response = await httpClient.post<PredictionResponse>("/predict-fire-risk", requestBody);
         return response.data;
     } catch (error) {
-        console.log("Error fetching prediction:",error);
+        console.log("Error fetching prediction:", error);
     }
 }

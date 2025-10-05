@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import { getFireLocations } from "../api/getFireLocations.ts";
+import { getPrediction, type RequestBody } from "../api/getPrediction.ts";
 
 export const globalParams: {
     viewer?: Cesium.Viewer;
@@ -23,12 +24,12 @@ function clearFirePoints(viewer: Cesium.Viewer) {
     globalParams.wildFirePoints = [];
 }
 
-function addFirePoint(viewer: Cesium.Viewer, lon: number, lat: number) {
+function addFirePoint(viewer: Cesium.Viewer, lon: number, lat: number, color: Cesium.Color = Cesium.Color.RED) {
     const pointEntity = viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(lon, lat),
         point: {
             pixelSize: 6,
-            color: Cesium.Color.RED,
+            color: color,
             outlineColor: Cesium.Color.WHITE,
             outlineWidth: 2,
             heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
@@ -127,13 +128,24 @@ async function trackCamera(viewer: Cesium.Viewer) {
         limit: 100, // request only up to 100
     };
 
+    const predictionRequestBody: RequestBody = {
+        bbox_corners: {
+            top_left: [west, north],
+            bottom_right: [east, south],
+        },
+        forecast_date: "2025-10-06"
+    };
+
     try {
-        const data = await getFireLocations(requestBody);
-        if (!data?.length) return;
+        const [fireLocations, predictions] = await Promise.all([
+            getFireLocations(requestBody),
+            getPrediction(predictionRequestBody)
+        ]);
+        if (!fireLocations?.length) return;
 
         const viewerScene = viewer.scene;
 
-        for (const fire of data) {
+        for (const fire of fireLocations) {
             const exists = globalParams.wildFireCollection.some((pf) => {
                 const pos = Cesium.Matrix4.getTranslation(pf.modelMatrix, new Cesium.Cartesian3());
                 const carto = Cesium.Cartographic.fromCartesian(pos);
@@ -154,7 +166,32 @@ async function trackCamera(viewer: Cesium.Viewer) {
                     if (oldSmoke) viewerScene.primitives.remove(oldSmoke);
                 }
                 particleFire(fire.longitude, fire.latitude, fire.elevation || 0);
-                adjustFireVisibility(viewer);
+                adjustFireVisibility(viewer, Cesium.Color.BLUE);
+            }
+        }
+
+        for (const fire of predictions.detailed_predictions) {
+            const exists = globalParams.wildFireCollection.some((pf) => {
+                const pos = Cesium.Matrix4.getTranslation(pf.modelMatrix, new Cesium.Cartesian3());
+                const carto = Cesium.Cartographic.fromCartesian(pos);
+                const lon = Cesium.Math.toDegrees(carto.longitude);
+                const lat = Cesium.Math.toDegrees(carto.latitude);
+                return (
+                    Math.abs(lon - fire.longitude) < 0.0001 &&
+                    Math.abs(lat - fire.latitude) < 0.0001
+                );
+            });
+
+            if (!exists) {
+                // Maintain a max of 100 active fires
+                if (globalParams.wildFireCollection.length >= 100) {
+                    const oldFire = globalParams.wildFireCollection.shift();
+                    const oldSmoke = globalParams.smokeCollection.shift();
+                    if (oldFire) viewerScene.primitives.remove(oldFire);
+                    if (oldSmoke) viewerScene.primitives.remove(oldSmoke);
+                }
+                particleFire(fire.longitude, fire.latitude, fire.elevation || 0);
+                adjustFireVisibility(viewer, Cesium.Color.RED);
             }
         }
 
@@ -263,7 +300,7 @@ export const initFire = () => {
     globalParams.smokeCollection = [];
 };
 
-function adjustFireVisibility(viewer: Cesium.Viewer) {
+function adjustFireVisibility(viewer: Cesium.Viewer, color: Cesium.Color = Cesium.Color.RED) {
     if (!globalParams.viewer) return;
 
     const cameraPosition = viewer.camera.positionWC;
@@ -289,7 +326,7 @@ function adjustFireVisibility(viewer: Cesium.Viewer) {
         const lat = Cesium.Math.toDegrees(cartoFire.latitude);
 
         if (!visible) {
-            addFirePoint(viewer, lon, lat);
+            addFirePoint(viewer, lon, lat, color);
         }
     }
 
