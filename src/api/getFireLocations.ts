@@ -1,5 +1,5 @@
 import httpClient from "./http-client.ts";
-import type {FireLocation, FireResponse} from "./models.ts";
+import type { FireLocation, FireResponse } from "./models/fire.models.ts";
 
 interface RequestBody {
     start: string;

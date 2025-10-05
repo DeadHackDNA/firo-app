@@ -31,7 +31,7 @@ export const initViewer = async (viewerId: string): Promise<Cesium.Viewer | unde
     viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
     globalParams.viewer = viewer
     globalParams.viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(-71.967, -13.517, 5000.0),
+        destination: Cesium.Cartesian3.fromDegrees(22.25880240645848, 2.66370198258959, 500.0),
         orientation: {
             heading: Cesium.Math.toRadians(0),
             pitch: Cesium.Math.toRadians(-30),
@@ -76,7 +76,7 @@ async function trackCamera(viewer: Cesium.Viewer) {
 
     const requestBody = {
         start: "2025-01-01",
-        end: "2025-01-10",
+        end: "2025-10-10",
         minLat: south,
         maxLat: north,
         minLon: west,
@@ -86,9 +86,9 @@ async function trackCamera(viewer: Cesium.Viewer) {
 
     try {
         const data = await getFireLocations(requestBody);
-
         if (data && data.length > 0) {
             console.log("Data: ", data);
+            globalParams.wildFireCollection = []
             for (const fire of data) {
                 const exists = globalParams.wildFireCollection.some((pf) => {
                     const pos = Cesium.Matrix4.getTranslation(pf.modelMatrix, new Cesium.Cartesian3());
@@ -102,9 +102,10 @@ async function trackCamera(viewer: Cesium.Viewer) {
                 });
 
                 if (!exists) {
-                    particleFire(fire.longitude, fire.latitude, fire.elevation);
+                    particleFire(fire.longitude, fire.latitude, 3500);
                 }
             }
+            console.log("Fires added:", globalParams.wildFireCollection.length);
         }
     } catch (err) {
         console.error("Error fetching fire locations:", err);
@@ -217,20 +218,19 @@ function adjustFireVisibility(viewer: Cesium.Viewer) {
     const terrainHeight = viewer.scene.globe.getHeight(carton);
     const cameraHeightAboveGround = carton.height - (terrainHeight ?? 0);
 
-    const maxCameraHeight = 5000; // hide if too high
-    const maxDistance = 5000; // hide if too far
+    //const maxCameraHeight = 5000; // hide if too high
+    //const maxDistance = 5000; // hide if too far
 
     for (const fire of globalParams.wildFireCollection) {
         const firePos = Cesium.Matrix4.getTranslation(fire.modelMatrix, new Cesium.Cartesian3());
         const distance = Cesium.Cartesian3.distance(cameraPosition, firePos);
-
-        fire.show = !(distance > maxDistance || cameraHeightAboveGround > maxCameraHeight);
+        // fire.show = !(distance > maxDistance || cameraHeightAboveGround > maxCameraHeight);
     }
 
     for (const smoke of globalParams.smokeCollection) {
         const smokePos = Cesium.Matrix4.getTranslation(smoke.modelMatrix, new Cesium.Cartesian3());
         const distance = Cesium.Cartesian3.distance(cameraPosition, smokePos);
 
-        smoke.show = !(distance > maxDistance || cameraHeight > maxCameraHeight);
+        // smoke.show = !(distance > maxDistance || cameraHeight > maxCameraHeight);
     }
 }

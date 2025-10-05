@@ -1,10 +1,10 @@
 import axios from "axios";
 import type { AxiosInstance, AxiosResponse } from "axios";
 
-const BASE_URL = import.meta.env.VITE_FIRO_API ?? "";
+const BASE_URL = import.meta.env.VITE_FIRO_IA_API ?? "";
 
 if (!BASE_URL) {
-  throw new Error("VITE_FIRO_API is not defined in environment variables");
+  throw new Error("VITE_FIRO_IA_API is not defined in environment variables");
 }
 
 const httpClient: AxiosInstance = axios.create({
