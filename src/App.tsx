@@ -1,17 +1,12 @@
-import CesiumViewer from "./components/cesium-viewer";
+import WelcomePage from "./components/WelcomePage.tsx";
+import { Routes, Route } from "react-router-dom";
+import MainPage from "./components/MainPage.tsx";
 
-function App() {
+export function App() {
   return (
-    <div className="flex w-full h-screen overflow-hidden bg-gray-100">
-      <div className="w-[100%] h-full p-2">
-        <CesiumViewer />
-      </div>
-
-      {/* <div className="w-[30%] h-full bg-white border-l border-gray-200 shadow-2xl">
-        <Chatbot />
-      </div> */}
-    </div>
+      <Routes>
+          <Route path="/" element={<WelcomePage />} />
+          <Route path="/map" element={<MainPage />} />
+      </Routes>
   );
 }
-
-export default App;

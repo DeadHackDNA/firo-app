@@ -15,5 +15,6 @@ export async function getPrediction(requestBody: RequestBody): Promise<Predictio
         return response.data;
     } catch (error) {
         console.log("Error fetching prediction:",error);
+        throw error;
     }
 }

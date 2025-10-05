@@ -16,5 +16,5 @@ export async function sendMessage(payload: ChatRequest): Promise<ChatResponse> {
 
 export const getChatbotMessages = async () => {
   const { data } = await httpClient.get("/chat");
-  return data; // puedes tiparlo con <T>
+  return data;
 };

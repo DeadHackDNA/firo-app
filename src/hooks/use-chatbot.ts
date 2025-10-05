@@ -12,8 +12,8 @@ export function useChatbot(onSuccess?: (data: ChatResponse) => void, onError?: (
 
 export function useChatbotMessages() {
   return useQuery({
-    queryKey: ["chatbotMessages"], // clave única para cache
-    queryFn: getChatbotMessages,   // función que trae los datos
-    staleTime: 1000 * 60,         // cachea por 1 minuto
+    queryKey: ["chatbotMessages"],
+    queryFn: getChatbotMessages,
+    staleTime: 1000 * 60,
   });
 }
