@@ -15,7 +15,6 @@ const httpClient: AxiosInstance = axios.create({
   },
 });
 
-// Interceptor de respuesta (puedes personalizar manejo de errores si quieres)
 httpClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error) => Promise.reject(error)

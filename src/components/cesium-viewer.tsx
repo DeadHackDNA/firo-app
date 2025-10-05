@@ -6,28 +6,25 @@ export default function CesiumViewer() {
   const containerRef = useRef(null);
 
   useEffect(() => {
-    let mounted = true;
 
-    (async () => {
-      try {
-        await initViewer("cesiumContainer");
-      } catch (err) {
-        console.error("Error inicializando Cesium:", err);
-      }
-    })();
+      (async () => {
+          try {
+              await initViewer("cesiumContainer");
+          } catch (err) {
+              console.error("Error initializing Cesium:", err);
+          }
+      })();
 
-    return () => {
-      try {
-        initFire();
-      } catch (e) {
-        console.warn("initFire error:", e);
-      }
-
-      if (globalParams.viewer && !globalParams.viewer.isDestroyed()) {
-        globalParams.viewer.destroy();
-      }
-      mounted = false;
-    };
+      return () => {
+          try {
+              initFire();
+          } catch (e) {
+              console.warn("initFire error:", e);
+          }
+          if (globalParams.viewer && !globalParams.viewer.isDestroyed()) {
+              globalParams.viewer.destroy();
+          }
+      };
   }, []);
 
   return (
@@ -36,12 +33,10 @@ export default function CesiumViewer() {
       id="cesiumContainer"
       className="relative w-full h-full bg-gradient-to-br from-gray-900 via-gray-800 to-black shadow-2xl rounded-xl overflow-hidden border border-gray-700"
     >
-      {/* Overlay para branding */}
       <div className="absolute top-4 left-4 bg-black/60 text-white text-sm px-3 py-1 rounded-md backdrop-blur-md shadow-lg">
         🌍 Cesium Viewer
       </div>
 
-      {/* Loader elegante */}
       <motion.div
         initial={{ opacity: 1 }}
         animate={{ opacity: 0 }}
@@ -53,7 +48,7 @@ export default function CesiumViewer() {
           transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
           className="w-8 h-8 border-4 border-white border-t-transparent rounded-full"
         />
-        <span className="ml-3">Cargando mapa...</span>
+        <span className="ml-3">Loading map...</span>
       </motion.div>
     </div>
   );
