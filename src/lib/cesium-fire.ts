@@ -1,17 +1,41 @@
 import * as Cesium from "cesium";
-import {getFireLocations} from "../api/getFireLocations.ts";
+import { getFireLocations } from "../api/getFireLocations.ts";
 
 export const globalParams: {
     viewer?: Cesium.Viewer;
     fireByDataSourcePromise?: never;
     wildFireCollection: Cesium.ParticleSystem[];
+    wildFirePoints: Cesium.Entity[];
     smokeCollection: Cesium.ParticleSystem[];
+
 } = {
     viewer: undefined,
     fireByDataSourcePromise: undefined,
     wildFireCollection: [],
+    wildFirePoints: [],
     smokeCollection: [],
 };
+
+function clearFirePoints(viewer: Cesium.Viewer) {
+    for (const point of globalParams.wildFirePoints) {
+        viewer.entities.remove(point);
+    }
+    globalParams.wildFirePoints = [];
+}
+
+function addFirePoint(viewer: Cesium.Viewer, lon: number, lat: number) {
+    const pointEntity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(lon, lat),
+        point: {
+            pixelSize: 6,
+            color: Cesium.Color.RED,
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: 2,
+            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+        },
+    });
+    globalParams.wildFirePoints.push(pointEntity);
+}
 
 export const initViewer = async (viewerId: string): Promise<Cesium.Viewer | undefined> => {
     Cesium.Ion.defaultAccessToken = (import.meta as any).env?.VITE_CESIUM_TOKEN ?? "";
@@ -31,7 +55,7 @@ export const initViewer = async (viewerId: string): Promise<Cesium.Viewer | unde
     viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
     globalParams.viewer = viewer
     globalParams.viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(22.25880240645848, 2.66370198258959, 500.0),
+        destination: Cesium.Cartesian3.fromDegrees(-92.34800065326836, 31.03199900619323, 100),
         orientation: {
             heading: Cesium.Math.toRadians(0),
             pitch: Cesium.Math.toRadians(-30),
@@ -43,78 +67,111 @@ export const initViewer = async (viewerId: string): Promise<Cesium.Viewer | unde
         (viewer as any)._fireTimeout = setTimeout(() => {
             trackCamera(viewer);
         }, 2000);
-    })
-    viewer.scene.postRender.addEventListener(() => {
-        adjustFireVisibility(viewer);
+    });
+    addParticleFire();
+    viewer.camera.changed.addEventListener(() => {
+        if ((viewer as any)._adjustFireTimeout) {
+            clearTimeout((viewer as any)._adjustFireTimeout);
+        }
+        (viewer as any)._adjustFireTimeout = setTimeout(() => {
+            adjustFireVisibility(viewer);
+        }, 1000);
     });
     return viewer;
 };
+
+let lastCameraPosition: Cesium.Cartesian3 | null = null;
+let lastFetchAbort: AbortController | null = null;
 
 async function trackCamera(viewer: Cesium.Viewer) {
     const scene = viewer.scene;
     const camera = viewer.camera;
     const globe = scene.globe;
 
-    const topLeft = globe.pick(
-        camera.getPickRay(new Cesium.Cartesian2(0, 0)),
-        scene
-    );
+    // --- Avoid redundant fetches if camera hasn't moved much ---
+    const currentPos = Cesium.Cartesian3.clone(camera.positionWC);
+    if (
+        lastCameraPosition &&
+        Cesium.Cartesian3.distance(currentPos, lastCameraPosition) < 500
+    ) {
+        return; // skip small movements
+    }
+    lastCameraPosition = currentPos;
+
+    // --- Cancel previous request if it's still running ---
+    if (lastFetchAbort) lastFetchAbort.abort();
+    lastFetchAbort = new AbortController();
+
+    const topLeft = globe.pick(camera.getPickRay(new Cesium.Cartesian2(0, 0)), scene);
     const bottomRight = globe.pick(
         camera.getPickRay(new Cesium.Cartesian2(scene.canvas.width, scene.canvas.height)),
         scene
     );
+    if (!topLeft || !bottomRight) return;
 
-    if (!topLeft || !bottomRight) return null;
+    const topLeftCarto = Cesium.Cartographic.fromCartesian(topLeft);
+    const bottomRightCarto = Cesium.Cartographic.fromCartesian(bottomRight);
 
-    const topLeftCarton = Cesium.Cartographic.fromCartesian(topLeft);
-    const bottomRightCarton = Cesium.Cartographic.fromCartesian(bottomRight);
-
-    const north = Cesium.Math.toDegrees(topLeftCarton.latitude);
-    const west = Cesium.Math.toDegrees(topLeftCarton.longitude);
-    const south = Cesium.Math.toDegrees(bottomRightCarton.latitude);
-    const east = Cesium.Math.toDegrees(bottomRightCarton.longitude);
+    const north = Cesium.Math.toDegrees(topLeftCarto.latitude);
+    const west = Cesium.Math.toDegrees(topLeftCarto.longitude);
+    const south = Cesium.Math.toDegrees(bottomRightCarto.latitude);
+    const east = Cesium.Math.toDegrees(bottomRightCarto.longitude);
 
     const requestBody = {
         start: "2025-01-01",
-        end: "2025-10-10",
+        end: "2025-02-10",
         minLat: south,
         maxLat: north,
         minLon: west,
         maxLon: east,
-        limit: 500,
+        limit: 100, // request only up to 100
     };
 
     try {
         const data = await getFireLocations(requestBody);
-        if (data && data.length > 0) {
-            console.log("Data: ", data);
-            globalParams.wildFireCollection = []
-            for (const fire of data) {
-                const exists = globalParams.wildFireCollection.some((pf) => {
-                    const pos = Cesium.Matrix4.getTranslation(pf.modelMatrix, new Cesium.Cartesian3());
-                    const carton = Cesium.Cartographic.fromCartesian(pos);
-                    const lon = Cesium.Math.toDegrees(carton.longitude);
-                    const lat = Cesium.Math.toDegrees(carton.latitude);
-                    return (
-                        Math.abs(lon - fire.longitude) < 0.0001 &&
-                        Math.abs(lat - fire.latitude) < 0.0001
-                    );
-                });
+        if (!data?.length) return;
 
-                if (!exists) {
-                    particleFire(fire.longitude, fire.latitude, 3500);
+        const viewerScene = viewer.scene;
+
+        for (const fire of data) {
+            const exists = globalParams.wildFireCollection.some((pf) => {
+                const pos = Cesium.Matrix4.getTranslation(pf.modelMatrix, new Cesium.Cartesian3());
+                const carto = Cesium.Cartographic.fromCartesian(pos);
+                const lon = Cesium.Math.toDegrees(carto.longitude);
+                const lat = Cesium.Math.toDegrees(carto.latitude);
+                return (
+                    Math.abs(lon - fire.longitude) < 0.0001 &&
+                    Math.abs(lat - fire.latitude) < 0.0001
+                );
+            });
+
+            if (!exists) {
+                // Maintain a max of 100 active fires
+                if (globalParams.wildFireCollection.length >= 100) {
+                    const oldFire = globalParams.wildFireCollection.shift();
+                    const oldSmoke = globalParams.smokeCollection.shift();
+                    if (oldFire) viewerScene.primitives.remove(oldFire);
+                    if (oldSmoke) viewerScene.primitives.remove(oldSmoke);
                 }
+                particleFire(fire.longitude, fire.latitude, fire.elevation || 0);
+                adjustFireVisibility(viewer);
             }
-            console.log("Fires added:", globalParams.wildFireCollection.length);
         }
-    } catch (err) {
+
+        console.log(`🔥 Active fires: ${globalParams.wildFireCollection.length}`);
+    } catch (err: any) {
+        if (err.name === "AbortError") {
+            // ignored because it means a new request started
+            return;
+        }
         console.error("Error fetching fire locations:", err);
     }
 }
 
+
 function particleFire(lon: number, lat: number, alt: number) {
     if (!globalParams.viewer) return;
-    const r = 50.0;
+    const r = 0.0;
     const wildFirePosition = Cesium.Cartesian3.fromDegrees(lon, lat, alt + r);
     const eventTime = 300.0;
     const loopEventTime = true;
@@ -171,9 +228,7 @@ export const addParticleFire = () => {
     globalParams.viewer.clock.multiplier = 1;
 
     const fireData: [number, number, number][] = [
-        [-71.967, -13.517, 3390.0],
-        [-71.965, -13.516, 3441.0],
-        [-71.969, -13.518, 3389.0],
+        [-92.34800065326836, 31.03199900619323, 10],
     ];
 
     for (let i = 0; i < fireData.length; i++) {
@@ -212,25 +267,36 @@ function adjustFireVisibility(viewer: Cesium.Viewer) {
     if (!globalParams.viewer) return;
 
     const cameraPosition = viewer.camera.positionWC;
-    const cameraHeight = viewer.scene.globe.ellipsoid.cartesianToCartographic(cameraPosition).height;
+    const carto = Cesium.Cartographic.fromCartesian(cameraPosition);
+    const terrainHeight = viewer.scene.globe.getHeight(carto);
+    const cameraHeightAboveGround = carto.height - (terrainHeight ?? 0);
 
-    const carton = Cesium.Cartographic.fromCartesian(viewer.camera.positionWC);
-    const terrainHeight = viewer.scene.globe.getHeight(carton);
-    const cameraHeightAboveGround = carton.height - (terrainHeight ?? 0);
+    const maxCameraHeight = 5000; // hide fire if too high
+    const maxDistance = 5000;     // hide fire if too far
 
-    //const maxCameraHeight = 5000; // hide if too high
-    //const maxDistance = 5000; // hide if too far
+    clearFirePoints(viewer); // limpia puntos previos
 
     for (const fire of globalParams.wildFireCollection) {
         const firePos = Cesium.Matrix4.getTranslation(fire.modelMatrix, new Cesium.Cartesian3());
         const distance = Cesium.Cartesian3.distance(cameraPosition, firePos);
-        // fire.show = !(distance > maxDistance || cameraHeightAboveGround > maxCameraHeight);
+
+        const visible = !(distance > maxDistance || cameraHeightAboveGround > maxCameraHeight);
+        fire.show = visible;
+
+        // convertir posición a coordenadas geográficas
+        const cartoFire = Cesium.Cartographic.fromCartesian(firePos);
+        const lon = Cesium.Math.toDegrees(cartoFire.longitude);
+        const lat = Cesium.Math.toDegrees(cartoFire.latitude);
+
+        if (!visible) {
+            addFirePoint(viewer, lon, lat);
+        }
     }
 
     for (const smoke of globalParams.smokeCollection) {
         const smokePos = Cesium.Matrix4.getTranslation(smoke.modelMatrix, new Cesium.Cartesian3());
         const distance = Cesium.Cartesian3.distance(cameraPosition, smokePos);
-
-        // smoke.show = !(distance > maxDistance || cameraHeight > maxCameraHeight);
+        const visible = !(distance > maxDistance || cameraHeightAboveGround > maxCameraHeight);
+        smoke.show = visible;
     }
 }
