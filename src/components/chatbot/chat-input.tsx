@@ -7,7 +7,7 @@ interface ChatInputProps {
   onSend: (text: string) => void;
 }
 
-export default function ChatInput({ onSend }: ChatInputProps, enabled = true) {
+export default function ChatInput({ onSend }: ChatInputProps) {
   const [input, setInput] = useState("");
 
   const handleSend = () => {
@@ -24,7 +24,6 @@ export default function ChatInput({ onSend }: ChatInputProps, enabled = true) {
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && handleSend()}
         className="flex-1 rounded-full px-4 py-6 shadow-sm"
-        disabled={!enabled}
       />
       <Button
         size="icon"

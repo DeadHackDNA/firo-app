@@ -12,7 +12,6 @@ import type {Message, Conversation, SendMessageResponse} from "../../api/models/
 export default function Chatbot() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [loading, setLoading] = useState(true);
-    const [enabled, setEnabled] = useState(true);
     const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
 
     useEffect(() => {
@@ -27,7 +26,6 @@ export default function Chatbot() {
                     createdAt: new Date().toISOString(),
                 },
             ]);
-            setEnabled(false);
             setLoading(false);
             return;
         }
@@ -71,9 +69,9 @@ export default function Chatbot() {
     }, []);
 
     const handleSend = async (text: string) => {
-        console.log(text);
         const userId = localStorage.getItem("userId");
         if (!text.trim() || !userId) return;
+
         const userMessage: Message = {
             id: crypto.randomUUID(),
             conversationId: currentConversationId ?? "temp",
@@ -81,22 +79,50 @@ export default function Chatbot() {
             content: text,
             createdAt: new Date().toISOString(),
         };
+
         setMessages((prev) => [...prev, userMessage]);
+
+        const loadingMessage: Message = {
+            id: "loading",
+            conversationId: currentConversationId ?? "temp",
+            sender: "bot",
+            content: "💬 ...",
+            createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, loadingMessage]);
+
         try {
-            const response:SendMessageResponse = await sendMessage(userId, text);
+            const response: SendMessageResponse = await sendMessage(userId, text);
             const botMessage = response.botMessage;
-            setMessages((prev) => [...prev, {
-                id: botMessage.id,
-                conversationId: botMessage.conversationId,
-                sender: "bot",
-                content: botMessage.content,
-                createdAt: botMessage.createdAt,
-            }]);
-            console.log("Bot response:", botMessage);
+
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.id === "loading"
+                        ? {
+                            id: botMessage.id,
+                            conversationId: botMessage.conversationId,
+                            sender: "bot",
+                            content: botMessage.content,
+                            createdAt: botMessage.createdAt,
+                        }
+                        : msg
+                )
+            );
         } catch (error) {
             console.error("Error sending message:", error);
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.id === "loading"
+                        ? {
+                            ...msg,
+                            content: "⚠️ Failed to get a response. Try again later.",
+                        }
+                        : msg
+                )
+            );
         }
     };
+
 
     if (loading) {
         return (
