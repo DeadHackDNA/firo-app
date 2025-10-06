@@ -88,25 +88,29 @@ async function trackCamera(viewer: Cesium.Viewer) {
     const camera = viewer.camera;
     const globe = scene.globe;
 
-    // --- Avoid redundant fetches if camera hasn't moved much ---
+    // --- Evitar peticiones redundantes si la cámara no se ha movido mucho ---
     const currentPos = Cesium.Cartesian3.clone(camera.positionWC);
     if (
         lastCameraPosition &&
         Cesium.Cartesian3.distance(currentPos, lastCameraPosition) < 500
     ) {
-        return; // skip small movements
+        return; // omitir movimientos pequeños
     }
     lastCameraPosition = currentPos;
 
-    // --- Cancel previous request if it's still running ---
+    // --- Cancelar la petición anterior si todavía está en curso ---
     if (lastFetchAbort) lastFetchAbort.abort();
     lastFetchAbort = new AbortController();
 
-    const topLeft = globe.pick(camera.getPickRay(new Cesium.Cartesian2(0, 0)), scene);
-    const bottomRight = globe.pick(
-        camera.getPickRay(new Cesium.Cartesian2(scene.canvas.width, scene.canvas.height)),
-        scene
+    const topLeftRay = camera.getPickRay(new Cesium.Cartesian2(0, 0));
+    const bottomRightRay = camera.getPickRay(
+        new Cesium.Cartesian2(scene.canvas.width, scene.canvas.height)
     );
+
+    if (!topLeftRay || !bottomRightRay) return;
+
+    const topLeft = globe.pick(topLeftRay, scene);
+    const bottomRight = globe.pick(bottomRightRay, scene);
     if (!topLeft || !bottomRight) return;
 
     const topLeftCarto = Cesium.Cartographic.fromCartesian(topLeft);
@@ -124,7 +128,7 @@ async function trackCamera(viewer: Cesium.Viewer) {
         maxLat: north,
         minLon: west,
         maxLon: east,
-        limit: 100, // request only up to 100
+        limit: 100, // solicitar como máximo 100
     };
 
     try {
@@ -146,7 +150,7 @@ async function trackCamera(viewer: Cesium.Viewer) {
             });
 
             if (!exists) {
-                // Maintain a max of 100 active fires
+                // Mantener un máximo de 100 incendios activos
                 if (globalParams.wildFireCollection.length >= 100) {
                     const oldFire = globalParams.wildFireCollection.shift();
                     const oldSmoke = globalParams.smokeCollection.shift();
@@ -161,7 +165,7 @@ async function trackCamera(viewer: Cesium.Viewer) {
         console.log(`🔥 Active fires: ${globalParams.wildFireCollection.length}`);
     } catch (err: any) {
         if (err.name === "AbortError") {
-            // ignored because it means a new request started
+            // ignorado porque significa que se inició una nueva petición
             return;
         }
         console.error("Error fetching fire locations:", err);
@@ -169,56 +173,147 @@ async function trackCamera(viewer: Cesium.Viewer) {
 }
 
 
-function particleFire(lon: number, lat: number, alt: number) {
+async function particleFire(lon: number, lat: number, alt: number) {
     if (!globalParams.viewer) return;
     const r = 0.0;
     const wildFirePosition = Cesium.Cartesian3.fromDegrees(lon, lat, alt + r);
     const eventTime = 300.0;
     const loopEventTime = true;
 
-    // FIRE particle system
-    const fire = new Cesium.ParticleSystem({
-        modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(wildFirePosition),
-        minimumSpeed: 1.0,
-        maximumSpeed: 4.0,
-        minimumParticleLife: 0.5,
-        maximumParticleLife: 2.5,
-        lifetime: eventTime,
-        loop: loopEventTime,
-        emissionRate: 20,
-        image: "/fire.png",
-        imageSize: new Cesium.Cartesian2(25, 25),
-        startScale: 1.0,
-        endScale: 4.0,
-        emitter: new Cesium.CircleEmitter(3.0),
-        startColor: Cesium.Color.RED.withAlpha(0.9),
-        endColor: Cesium.Color.ORANGE.withAlpha(0.3),
-    });
+    // Utilidad: intentar precargar una imagen (resuelve si se carga)
+    const tryLoadImage = (url: string): Promise<HTMLImageElement> => {
+        return new Promise((resolve, reject) => {
+            try {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = () => resolve(img);
+                img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+                img.src = url;
+            } catch (e) {
+                reject(e);
+            }
+        });
+    };
 
-    globalParams.wildFireCollection.push(fire);
-    globalParams.viewer.scene.primitives.add(fire);
+    // Sistema de partículas de FUEGO (crearlo solo si la imagen se carga)
+    try {
+        await tryLoadImage("/fire.png");
+        const fire = new Cesium.ParticleSystem({
+            modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(wildFirePosition),
+            minimumSpeed: 1.0,
+            maximumSpeed: 4.0,
+            minimumParticleLife: 0.5,
+            maximumParticleLife: 2.5,
+            lifetime: eventTime,
+            loop: loopEventTime,
+            emissionRate: 20,
+            image: "/fire.png",
+            imageSize: new Cesium.Cartesian2(25, 25),
+            startScale: 1.0,
+            endScale: 4.0,
+            emitter: new Cesium.CircleEmitter(3.0),
+            startColor: Cesium.Color.RED.withAlpha(0.9),
+            endColor: Cesium.Color.ORANGE.withAlpha(0.3),
+        });
 
-    // SMOKE particle system
-    const smoke = new Cesium.ParticleSystem({
-        modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(wildFirePosition),
-        minimumSpeed: 0.5,
-        maximumSpeed: 2.0,
-        minimumParticleLife: 2.0,
-        maximumParticleLife: 6.0,
-        lifetime: eventTime,
-        loop: loopEventTime,
-        emissionRate: 10,
-        image: "/smoke.png",
-        imageSize: new Cesium.Cartesian2(40, 40),
-        startScale: 2.0,
-        endScale: 8.0,
-        emitter: new Cesium.CircleEmitter(5.0),
-        startColor: Cesium.Color.GRAY.withAlpha(0.5),
-        endColor: Cesium.Color.WHITE.withAlpha(0.0),
-    });
+        globalParams.wildFireCollection.push(fire);
+        globalParams.viewer.scene.primitives.add(fire);
+    } catch (e) {
+        console.warn("fire.png failed to load, skipping fire particle system:", e);
+    }
 
-    globalParams.smokeCollection.push(smoke);
-    globalParams.viewer.scene.primitives.add(smoke);
+    // Sistema de partículas de HUMO (crearlo solo si la imagen se carga)
+    try {
+        await tryLoadImage("/smoke.png");
+        const smoke = new Cesium.ParticleSystem({
+            modelMatrix: Cesium.Transforms.eastNorthUpToFixedFrame(wildFirePosition),
+            // Hacer que el humo suba más verticalmente y se alargue:
+            // - velocidades ascendentes más altas y vida mayor para que las partículas lleguen más alto
+            // - ángulo de emisor más estrecho para que suban casi en línea recta
+            minimumSpeed: 3.0,
+            maximumSpeed: 7.0,
+            minimumParticleLife: 4.0,
+            maximumParticleLife: 20.0,
+            lifetime: eventTime,
+            loop: loopEventTime,
+            emissionRate: 8,
+            image: "/smoke.png",
+            // mantener el sprite en un tamaño razonable; el crecimiento viene de start/end scale
+            // reducido desde valores muy grandes para evitar una mancha opaca a distancia
+            imageSize: new Cesium.Cartesian2(32, 32),
+            startScale: 1.6,
+            endScale: 16.0,
+            // Cono extremadamente estrecho para que las columnas de humo sean altas y delgadas
+            // hacer el emisor aún más estrecho para que el humo suba más vertical
+            emitter: new Cesium.ConeEmitter(Cesium.Math.toRadians(0.2)),
+            // reducir la alfa inicial para que el humo sea más translúcido en general
+            startColor: Cesium.Color.GRAY.withAlpha(0.45),
+            endColor: Cesium.Color.WHITE.withAlpha(0.0),
+        });
+
+    // Atenuar la alfa según la distancia a la cámara para que el humo lejano no
+    // forme una mancha sólida.
+    // Esta función se ejecuta por partícula en cada actualización. Calculamos la
+    // distancia entre la cámara y la partícula (en coordenadas del mundo) y atenuamos
+    // la alfa de la partícula entre las distancias fadeStart y fadeEnd.
+    // Añadir deriva lateral (viento) sin eliminar el comportamiento vertical.
+    // Usamos dt para aplicar un pequeño impulso horizontal a la velocidad de la partícula.
+    smoke.updateCallback = (particle: any, dt: number) => {
+            try {
+                if (!globalParams.viewer) return;
+                const cameraPos = globalParams.viewer.camera.positionWC;
+
+                // particle.position está en el espacio local del sistema de partículas (modelMatrix).
+                // Convertir primero a coordenadas del mundo para el cálculo de distancia/atenuación.
+                const worldPos = Cesium.Matrix4.multiplyByPoint(
+                    smoke.modelMatrix,
+                    particle.position,
+                    new Cesium.Cartesian3()
+                );
+
+                const distance = Cesium.Cartesian3.distance(cameraPos, worldPos);
+
+                // ajustar estos valores a gusto; a distancias > fadeEnd el humo será mayormente invisible
+                const fadeStart = 1800.0; // empezar a atenuar el humo
+                const fadeEnd = 4500.0; // totalmente atenuado
+
+                let attenuation = 1.0;
+                if (distance > fadeStart) {
+                    attenuation = 1.0 - (distance - fadeStart) / (fadeEnd - fadeStart);
+                    attenuation = Cesium.Math.clamp(attenuation, 0.0, 1.0);
+                }
+
+                // Aplicar la atenuación al alpha del color de la partícula manteniendo su tono actual.
+                if (particle.color) {
+                    particle.color = particle.color.withAlpha(particle.color.alpha * attenuation);
+                }
+
+                // --- DERIVA LATERAL ---
+                // Componente horizontal pequeña (en coordenadas locales del sistema):
+                // como el sistema usa east-north-up, modificar la componente X mueve el humo hacia el este.
+                // Ajusta `windStrength` para controlar qué tanto se desplaza a un lado.
+                const windStrength = 7.2; // metros/segundo (valor por defecto, prueba y ajusta)
+
+                // Añadir variación por partícula para que no todas vayan exactamente igual
+                const randomFactor = (particle._driftFactor ??= (Math.random() * 0.6 + 0.7));
+
+                // Aumentamos la velocidad horizontal en la componente X del velocity local
+                if (!particle.velocity) particle.velocity = new Cesium.Cartesian3();
+                // Aplicamos impulso proporcional a dt (velocidad en m/s)
+                particle.velocity.x += windStrength * randomFactor * dt;
+
+            } catch (err) {
+                // mantener robusto en caso de estado inesperado de la partícula
+                // eslint-disable-next-line no-console
+                console.warn("smoke updateCallback error", err);
+            }
+        };
+
+        globalParams.smokeCollection.push(smoke);
+        globalParams.viewer.scene.primitives.add(smoke);
+    } catch (e) {
+        console.warn("smoke.png failed to load, skipping smoke particle system:", e);
+    }
 }
 
 export const addParticleFire = () => {
@@ -242,7 +337,7 @@ export const initFire = () => {
     globalParams.viewer.clock.currentTime = Cesium.JulianDate.now();
 
     if (globalParams.fireByDataSourcePromise !== undefined) {
-        // Integrate logic wit database here
+        // Integrar lógica con la base de datos aquí
     }
 
     let wildFireCollen = globalParams.wildFireCollection.length - 1;
@@ -271,8 +366,8 @@ function adjustFireVisibility(viewer: Cesium.Viewer) {
     const terrainHeight = viewer.scene.globe.getHeight(carto);
     const cameraHeightAboveGround = carto.height - (terrainHeight ?? 0);
 
-    const maxCameraHeight = 5000; // hide fire if too high
-    const maxDistance = 5000;     // hide fire if too far
+    const maxCameraHeight = 5000; // ocultar fuego si la cámara está muy alta
+    const maxDistance = 5000;     // ocultar fuego si está demasiado lejos
 
     clearFirePoints(viewer); // limpia puntos previos
 
