@@ -5,70 +5,45 @@ import ChatHeader from "./chat-header";
 import ChatMessages from "./chat-messages";
 import ChatInput from "./chat-input";
 import { sendMessage } from "../../api/sendMessage.ts";
-import { getConversations } from "../../api/getConversations.ts";
 import { useViewContext } from "../../hooks/use-view-context";
 
-import type { Message, Conversation, SendMessageResponse } from "../../api/models/message.models.ts";
+import type { Message, SendMessageResponse } from "../../api/models/message.models.ts";
 import { cachedFireLocations, cachedFireLocationsPredicted } from "../../lib/cesium-fire.ts";
 
 export default function Chatbot() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [loading, setLoading] = useState(true);
-    const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
     const viewContext = useViewContext();
 
     useEffect(() => {
         const userId = localStorage.getItem("userId");
+        const userName = localStorage.getItem("userName") || "User";
+        
+        // CRÍTICO: SIEMPRE empezar con chat limpio - JAMÁS cargar historial
         if (!userId) {
             setMessages([
                 {
-                    id: "init",
-                    conversationId: "none",
+                    id: "init_" + Date.now(),
+                    conversationId: "temp",
                     sender: "bot",
-                    content: "Welcome to FIRO Fire Assistant! Please log in to access your previous conversations and get personalized wildfire analysis.",
+                    content: "Welcome to FIRO Fire Assistant! Please log in to start a fresh conversation.",
                     createdAt: new Date().toISOString(),
                 },
             ]);
-            setLoading(false);
-            return;
+        } else {
+            // SIEMPRE mensaje de bienvenida fresco - SIN historial previo
+            setMessages([
+                {
+                    id: "welcome_" + Date.now(),
+                    conversationId: "temp",
+                    sender: "bot",
+                    content: `Hello ${userName}! Welcome to FIRO Fire Assistant! I can see what you're viewing on the 3D map and provide context-aware analysis. I can help you understand fire patterns, analyze current fire activity in your view, explain why certain areas might not have fires, and provide risk assessments. Try searching for a location and I'll analyze what you see. How can I assist you today?`,
+                    createdAt: new Date().toISOString(),
+                },
+            ]);
         }
-
-        const fetchConversations = async () => {
-            try {
-                const conversations: Conversation[] = await getConversations(userId);
-                const firstConversation = conversations?.[0];
-
-                if (firstConversation) {
-                    const orderedMessages = [...(firstConversation.messages ?? [])].reverse();
-                    setCurrentConversationId(firstConversation.id);
-                    setMessages(orderedMessages);
-                } else {
-                    setMessages([
-                        {
-                            id: "init",
-                            conversationId: "none",
-                            sender: "bot",
-                            content: "Welcome to FIRO Fire Assistant! I can see what you're viewing on the 3D map and provide context-aware analysis. I can help you understand fire patterns, analyze current fire activity in your view, explain why certain areas might not have fires (like remote regions such as Sicuani, Peru), and provide risk assessments. Try searching for a location and I'll analyze what you see. How can I assist you today?",
-                            createdAt: new Date().toISOString(),
-                        },
-                    ]);
-                }
-            } catch (error) {
-                console.error("Error fetching user conversations:", error);
-                setMessages([
-                    {
-                        id: "error",
-                        conversationId: "none",
-                        sender: "bot",
-                        content: "Failed to load your conversations.",
-                        createdAt: new Date().toISOString(),
-                    },
-                ]);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchConversations().then();
+        
+        setLoading(false);
     }, []);
 
     const getCurrentFirePoints = () => {
@@ -98,7 +73,7 @@ export default function Chatbot() {
 
         const userMessage: Message = {
             id: crypto.randomUUID(),
-            conversationId: currentConversationId ?? "temp",
+            conversationId: "temp_" + Date.now(),
             sender: "user",
             content: text,
             createdAt: new Date().toISOString(),
@@ -108,7 +83,7 @@ export default function Chatbot() {
 
         const loadingMessage: Message = {
             id: "loading",
-            conversationId: currentConversationId ?? "temp",
+            conversationId: "temp_" + Date.now(),
             sender: "bot",
             content: "💬 ...",
             createdAt: new Date().toISOString(),

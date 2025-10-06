@@ -17,8 +17,10 @@ export default function CesiumViewer() {
     }, []);
 
     const handleGoHome = () => {
-        // Limpiar localStorage y redirigir a la página principal
+        // CRÍTICO: Limpiar completamente la sesión - no hay cache que limpiar
         localStorage.removeItem("userId");
+        localStorage.removeItem("userName");
+        localStorage.removeItem("sessionStart");
         navigate("/");
     };
 
