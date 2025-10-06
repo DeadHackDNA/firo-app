@@ -10,34 +10,34 @@ export default function CesiumViewer() {
         setItsMounted(true);
     }, []);
 
-  useEffect(() => {
-      (async () => {
-          try {
-              if (!itsMounted) return;
-              await initViewer("cesiumContainer");
-          } catch (err) {
-              console.error("Error initializing Cesium:", err);
-          }
-      })();
+    useEffect(() => {
+        (async () => {
+            try {
+                if (!itsMounted) return;
+                await initViewer("cesiumContainer");
+            } catch (err) {
+                console.error("Error initializing Cesium:", err);
+            }
+        })();
 
-      return () => {
-          try {
-              initFire();
-          } catch (e) {
-              console.warn("initFire error:", e);
-          }
-          if (globalParams.viewer && !globalParams.viewer.isDestroyed()) {
-              globalParams.viewer.destroy();
-          }
-      };
-  }, [itsMounted]);
+        return () => {
+            try {
+                initFire();
+            } catch (e) {
+                console.warn("initFire error:", e);
+            }
+            if (globalParams.viewer && !globalParams.viewer.isDestroyed()) {
+                globalParams.viewer.destroy();
+            }
+        };
+    }, [itsMounted]);
 
     return (
         <div
             id="cesiumContainer"
             className="relative w-full h-full bg-gradient-to-br from-gray-900 via-gray-800 to-black shadow-2xl rounded-xl overflow-hidden border border-gray-700">
             <div className="absolute top-4 left-4 flex flex-col gap-2 z-50">
-                <DateRangeSelect onRangeChange={() => {console.log("sadjads")}} />
+                <DateRangeSelect onRangeChange={() => { console.log("sadjads") }} />
                 <div className="bg-black/60 text-white text-sm px-3 py-1 rounded-md backdrop-blur-md shadow-lg">
                     🌍 Cesium Viewer
                 </div>

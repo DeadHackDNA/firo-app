@@ -21,6 +21,8 @@ export interface FireLocation {
     temperature: number | null;
     wind_speed: number | null;
     precipitation: number | null;
+    terrain?: { elevation?: number; land_cover?: string; slope?: number };
+    vegetation?: { density?: string };
 }
 
 export interface FireResponse {

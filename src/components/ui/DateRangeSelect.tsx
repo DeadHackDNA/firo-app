@@ -23,6 +23,7 @@ export default function DateRangeSelect({ onRangeChange }: DateRangeSelectProps)
                 value={selectedRange}
                 onChange={handleChange}
                 className="text-sm px-2 py-1 border rounded-md focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                disabled={true}
             >
                 <option value="24h">Last 24h</option>
                 <option value="7d">Last 7 days</option>

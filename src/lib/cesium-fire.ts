@@ -1,6 +1,6 @@
 import * as Cesium from "cesium";
-import {getFireLocations} from "../api/getFireLocations.ts";
-import {getPrediction, type RequestBody} from "../api/getPrediction.ts";
+import { getFireLocations } from "../api/getFireLocations.ts";
+import { getPrediction, type RequestBody } from "../api/getPrediction.ts";
 
 export const globalParams: {
     viewer?: Cesium.Viewer;
@@ -16,7 +16,14 @@ export const globalParams: {
     smokeCollection: [],
 };
 
-export const cachedFireLocations: { lat: string, lon: string }[] = [];
+interface cachedFireLocationsTypes {
+    lat: string;
+    lon: string;
+    terrain?: { elevation?: number; land_cover?: string; slope?: number };
+    vegetation?: { density?: string };
+}
+
+export const cachedFireLocations: cachedFireLocationsTypes[] = [];
 
 function clearFirePoints(viewer: Cesium.Viewer) {
     for (const point of globalParams.wildFirePoints) {
@@ -164,7 +171,12 @@ async function trackCamera(viewer: Cesium.Viewer) {
                 }
                 particleFire(fire.longitude, fire.latitude, fire.elevation || 0);
                 adjustFireVisibility(viewer, Cesium.Color.BLUE);
-                cachedFireLocations.push({ lat: fire.latitude.toFixed(4), lon: fire.longitude.toFixed(4) });
+                cachedFireLocations.push({
+                    lat: fire.latitude.toFixed(4),
+                    lon: fire.longitude.toFixed(4),
+                    terrain: fire.terrain,
+                    vegetation: fire.vegetation
+                });
                 if (cachedFireLocations.length > 50) {
                     cachedFireLocations.shift(); // mantener solo las últimas 50 ubicaciones
                 }
@@ -196,7 +208,10 @@ async function trackCamera(viewer: Cesium.Viewer) {
                 }
                 particleFire(fire.lon, fire.lat, fire.elevation || 0);
                 adjustFireVisibility(viewer, Cesium.Color.RED);
-                cachedFireLocations.push({ lat: fire.lat.toFixed(4), lon: fire.lon.toFixed(4) });
+                cachedFireLocations.push({
+                    lat: fire.lat.toFixed(4), lon: fire.lon.toFixed(4), terrain: fire.terrain,
+                    vegetation: fire.vegetation
+                });
                 if (cachedFireLocations.length > 50) {
                     cachedFireLocations.shift(); // mantener solo las últimas 50 ubicaciones
                 }
@@ -280,6 +295,8 @@ export const addParticleFire = () => {
     for (let i = 0; i < fireData.length; i++) {
         particleFire(fireData[i][0], fireData[i][1], fireData[i][2]);
     }
+
+    cachedFireLocations.push({ lat: fireData[0][1].toFixed(4), lon: fireData[0][0].toFixed(4), terrain: {}, vegetation: {} });
 };
 
 export const initFire = () => {
