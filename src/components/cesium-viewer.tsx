@@ -37,9 +37,32 @@ export default function CesiumViewer() {
             id="cesiumContainer"
             className="relative w-full h-full bg-gradient-to-br from-gray-900 via-gray-800 to-black shadow-2xl rounded-xl overflow-hidden border border-gray-700">
             <div className="absolute top-4 left-4 flex flex-col gap-2 z-50">
-                <DateRangeSelect onRangeChange={() => { console.log("sadjads") }} />
-                <div className="bg-black/60 text-white text-sm px-3 py-1 rounded-md backdrop-blur-md shadow-lg">
-                    🌍 Cesium Viewer
+                <div className="d-flex">
+                    <div className="flex flex-col gap-2">
+                        <div>
+                            <DateRangeSelect onRangeChange={() => { console.log("sadjads") }} />
+                        </div>
+                        <div className="bg-black/60 text-white text-sm px-3 py-1 rounded-md backdrop-blur-md shadow-lg">
+                            <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                🚀 Data Source: NASA FIRo
+                            </a>
+                        </div>
+                        <div className="bg-black/60 text-white text-sm px-3 py-1 rounded-md backdrop-blur-md shadow-lg">
+                            <a href="https://github.com/DeadHackDNA/" target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                🚀 Team
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div className="absolute top-4 right-4 flex flex-col gap-2 z-50">
+                <div className="">
+                    <div className="flex items-center justify-center text-white">
+                        {/* <div className="w-5 h-6 border-4 border-blue-500 border-t-transparent rounded-full animate-spin px-2"></div> */}
+                        <p className="px-2 text-lg font-semibold text-blue-200 animate-pulse">
+                            Interact with the map to predict fire
+                        </p>
+                    </div>
                 </div>
             </div>
             <motion.div

@@ -8,7 +8,7 @@ import { sendMessage } from "../../api/sendMessage.ts";
 import { getConversations } from "../../api/getConversations.ts";
 
 import type { Message, Conversation, SendMessageResponse } from "../../api/models/message.models.ts";
-import { cachedFireLocations } from "../../lib/cesium-fire.ts";
+import { cachedFireLocations, cachedFireLocationsPredicted } from "../../lib/cesium-fire.ts";
 
 export default function Chatbot() {
     const [messages, setMessages] = useState<Message[]>([]);
@@ -78,9 +78,18 @@ export default function Chatbot() {
         return firePoints;
     }
 
+    const getPredictedFirePoints = () => {
+        const firePoints: { lat: number, lon: number }[] = cachedFireLocationsPredicted.map((fire) => {
+            const lat = parseFloat(fire.lat);
+            const lon = parseFloat(fire.lon);
+            return { lat, lon };
+        });
+        return firePoints;
+    }
+
     const handleSend = async (text: string) => {
         const jsonFirePoints = JSON.stringify(getCurrentFirePoints());
-        const contentHidden = `\n\nCurrent fire locations (latitude and longitude): ${jsonFirePoints}`;
+        const contentHidden = `\n\nCurrent fire locations (latitude and longitude): ${jsonFirePoints} and predicted fire locations: ${JSON.stringify(getPredictedFirePoints())}.`;
         const userId = localStorage.getItem("userId");
         if (!text.trim() || !userId) return;
 
