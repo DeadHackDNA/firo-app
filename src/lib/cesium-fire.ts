@@ -8,12 +8,15 @@ export const globalParams: {
     wildFireCollection: Cesium.ParticleSystem[];
     wildFirePoints: Cesium.Entity[];
     smokeCollection: Cesium.ParticleSystem[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    viewContext?: any; // Referencia al contexto de vista
 } = {
     viewer: undefined,
     fireByDataSourcePromise: undefined,
     wildFireCollection: [],
     wildFirePoints: [],
     smokeCollection: [],
+    viewContext: undefined,
 };
 
 interface cachedFireLocationsTypes {
@@ -27,6 +30,12 @@ interface cachedFireLocationsTypes {
 export const cachedFireLocations: cachedFireLocationsTypes[] = [];
 export const cachedFireLocationsPredicted: cachedFireLocationsTypes[] = [];
 
+// Función para establecer el contexto de vista
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function setViewContext(context: any) {
+    globalParams.viewContext = context;
+}
+
 function clearFirePoints(viewer: Cesium.Viewer) {
     for (const point of globalParams.wildFirePoints) {
         viewer.entities.remove(point);
@@ -35,20 +44,26 @@ function clearFirePoints(viewer: Cesium.Viewer) {
 }
 
 function addFirePoint(viewer: Cesium.Viewer, lon: number, lat: number, color: Cesium.Color = Cesium.Color.RED) {
+    // Siempre usar referencia al terreno 3D de Cesium para consistencia visual
     const pointEntity = viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(lon, lat),
         point: {
-            pixelSize: 6,
+            pixelSize: 8,
             color: color,
             outlineColor: Cesium.Color.WHITE,
             outlineWidth: 2,
-            heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND, // Mejor que RELATIVE_TO_GROUND
         },
     });
     globalParams.wildFirePoints.push(pointEntity);
 }
 
 export const initViewer = async (viewerId: string): Promise<Cesium.Viewer | undefined> => {
+    // Evitar múltiples inicializaciones
+    if (globalParams.viewer && !globalParams.viewer.isDestroyed()) {
+        return globalParams.viewer;
+    }
+
     Cesium.Ion.defaultAccessToken = (import.meta).env?.VITE_CESIUM_TOKEN ?? "";
 
     const viewer = new Cesium.Viewer(viewerId, {
@@ -64,40 +79,45 @@ export const initViewer = async (viewerId: string): Promise<Cesium.Viewer | unde
     viewer.imageryLayers.addImageryProvider(imagery);
 
     viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
-    globalParams.viewer = viewer
+    globalParams.viewer = viewer;
+    
+    // Solo volar a la posición inicial si es una nueva inicialización
     globalParams.viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(-92.34800065326836, 31.03199900619323, 100),
+        destination: Cesium.Cartesian3.fromDegrees(-92.34800065326836, 31.03199900619323, 100000),
         orientation: {
             heading: Cesium.Math.toRadians(0),
             pitch: Cesium.Math.toRadians(-30),
             roll: 0.0,
         },
+        duration: 1.0
     });
+    // Consolidar ambos listeners en uno solo para evitar conflictos
     viewer.camera.changed.addEventListener(() => {
-        // @ts-ignore
+        // @ts-expect-error - Cesium viewer has custom timeout property
         clearTimeout((viewer)._fireTimeout);
-        // @ts-ignore
+        // @ts-expect-error - Cesium viewer has custom timeout property
+        if ((viewer)._adjustFireTimeout) {
+            // @ts-expect-error - Cesium viewer has custom timeout property
+            clearTimeout((viewer)._adjustFireTimeout);
+        }
+        
+        // @ts-expect-error - Cesium viewer has custom timeout property
         (viewer)._fireTimeout = setTimeout(() => {
             trackCamera(viewer);
         }, 2000);
-    });
-    addParticleFire();
-    viewer.camera.changed.addEventListener(() => {
-        // @ts-ignore
-        if ((viewer)._adjustFireTimeout) {
-            // @ts-ignore
-            clearTimeout((viewer)._adjustFireTimeout);
-        }
-        // @ts-ignore
+        
+        // @ts-expect-error - Cesium viewer has custom timeout property
         (viewer)._adjustFireTimeout = setTimeout(() => {
             adjustFireVisibility(viewer);
         }, 1000);
     });
+    addParticleFire();
     return viewer;
 };
 
 let lastCameraPosition: Cesium.Cartesian3 | null = null;
 let lastFetchAbort: AbortController | null = null;
+
 
 async function trackCamera(viewer: Cesium.Viewer) {
     const scene = viewer.scene;
@@ -108,7 +128,7 @@ async function trackCamera(viewer: Cesium.Viewer) {
     const currentPos = Cesium.Cartesian3.clone(camera.positionWC);
     if (
         lastCameraPosition &&
-        Cesium.Cartesian3.distance(currentPos, lastCameraPosition) < 500
+        Cesium.Cartesian3.distance(currentPos, lastCameraPosition) < 5000 // Aumentado a 5km para ser menos sensible
     ) {
         return; // omitir movimientos pequeños
     }
@@ -153,7 +173,54 @@ async function trackCamera(viewer: Cesium.Viewer) {
             getFireLocations(requestBody),
             getPrediction(predictionRequestBody)
         ]);
-        if (!fireLocations?.length) return;
+
+        // Actualizar el contexto con el bounding box actual
+        if (globalParams.viewContext) {
+            globalParams.viewContext.updateBoundingBox({
+                north,
+                south,
+                east,
+                west
+            });
+
+            // Actualizar ubicación actual basada en el centro de la vista
+            const centerLat = (north + south) / 2;
+            const centerLon = (east + west) / 2;
+            const cameraHeight = camera.positionCartographic.height;
+            
+            // Determinar el nombre de la ubicación (simplificado)
+            let locationName = "Unknown Location";
+            if (centerLat >= -90 && centerLat <= 90 && centerLon >= -180 && centerLon <= 180) {
+                // Determinar región general basándose en coordenadas
+                if (centerLat > 23.5) locationName = "Northern Region";
+                else if (centerLat < -23.5) locationName = "Southern Region";
+                else locationName = "Tropical Region";
+                
+                if (centerLon > -120 && centerLon < -60 && centerLat > -60 && centerLat < 15) {
+                    locationName = "South America";
+                }
+            }
+
+            globalParams.viewContext.updateCurrentLocation({
+                name: locationName,
+                latitude: centerLat,
+                longitude: centerLon,
+                zoom: cameraHeight
+            });
+        }
+
+        if (!fireLocations?.length) {
+            // Actualizar contexto con array vacío si no hay fuegos
+            if (globalParams.viewContext) {
+                globalParams.viewContext.updateVisibleFires([]);
+            }
+            return;
+        }
+
+        // Actualizar el contexto con los fuegos visibles
+        if (globalParams.viewContext) {
+            globalParams.viewContext.updateVisibleFires(fireLocations);
+        }
 
         const viewerScene = viewer.scene;
 
@@ -177,7 +244,7 @@ async function trackCamera(viewer: Cesium.Viewer) {
                     if (oldFire) viewerScene.primitives.remove(oldFire);
                     if (oldSmoke) viewerScene.primitives.remove(oldSmoke);
                 }
-                particleFire(fire.longitude, fire.latitude, fire.elevation || 0);
+                particleFire(fire.longitude, fire.latitude);
                 adjustFireVisibility(viewer, Cesium.Color.BLUE);
                 cachedFireLocations.push({
                     lat: fire.latitude.toFixed(4),
@@ -192,7 +259,7 @@ async function trackCamera(viewer: Cesium.Viewer) {
         }
 
         let count = 0;
-        for (const fire of predictions.risk_grid) {
+        for (const fire of predictions?.risk_grid || []) {
             if (count >= 2) break; // limitar a 2 predicciones por llamada
             count++;
             const exists = globalParams.wildFireCollection.some((pf) => {
@@ -214,7 +281,8 @@ async function trackCamera(viewer: Cesium.Viewer) {
                     if (oldFire) viewerScene.primitives.remove(oldFire);
                     if (oldSmoke) viewerScene.primitives.remove(oldSmoke);
                 }
-                particleFire(fire.lon, fire.lat, fire.elevation || 0);
+                // Los datos de elevación del terrain se guardan en el contexto para el chatbot
+                particleFire(fire.lon, fire.lat);
                 adjustFireVisibility(viewer, Cesium.Color.RED);
                 cachedFireLocationsPredicted.push({
                     lat: fire.lat.toFixed(4), lon: fire.lon.toFixed(4), terrain: fire.terrain,
@@ -227,21 +295,37 @@ async function trackCamera(viewer: Cesium.Viewer) {
         }
         console.log(`🔥 Active fires: ${globalParams.wildFireCollection.length}`);
     } catch (error) {
-        // @ts-ignore
+        // @ts-expect-error - AbortError type checking
         if (error.name === "AbortError") {
             // ignored because it means a new request started
             return;
         }
-        // @ts-ignore
-        console.error("Error fetching fire locations:", err);
+        console.error("Error fetching fire locations:", error);
     }
 }
 
 
-async function particleFire(lon: number, lat: number, alt: number) {
+async function particleFire(lon: number, lat: number) {
     if (!globalParams.viewer) return;
-    const r = 0.0;
-    const wildFirePosition = Cesium.Cartesian3.fromDegrees(lon, lat, alt + r);
+    
+    // IMPORTANTE: Se usa el terreno 3D de Cesium para posicionamiento visual preciso.
+    // Los datos de elevación de la API se utilizan solo para contexto del chatbot.
+    // Esto garantiza que los fuegos aparezcan correctamente sobre el terreno 3D.
+    let terrainElevation = 0;
+    try {
+        const position = Cesium.Cartographic.fromDegrees(lon, lat);
+        const heights = await Cesium.sampleTerrainMostDetailed(globalParams.viewer.terrainProvider, [position]);
+        if (heights[0] && heights[0].height !== undefined) {
+            terrainElevation = heights[0].height;
+        }
+    } catch (err) {
+        console.warn("Could not sample terrain height, using sea level:", err);
+        terrainElevation = 0;
+    }
+    
+    // Añadir offset para que el fuego esté visible sobre el terreno
+    const heightOffset = 15; // 15 metros sobre el terreno para mejor visibilidad
+    const wildFirePosition = Cesium.Cartesian3.fromDegrees(lon, lat, terrainElevation + heightOffset);
     const eventTime = 300.0;
     const loopEventTime = true;
 
@@ -323,6 +407,7 @@ async function particleFire(lon: number, lat: number, alt: number) {
         // la alfa de la partícula entre las distancias fadeStart y fadeEnd.
         // Añadir deriva lateral (viento) sin eliminar el comportamiento vertical.
         // Usamos dt para aplicar un pequeño impulso horizontal a la velocidad de la partícula.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         smoke.updateCallback = (particle: any, dt: number) => {
             try {
                 if (!globalParams.viewer) return;
@@ -369,7 +454,6 @@ async function particleFire(lon: number, lat: number, alt: number) {
 
             } catch (err) {
                 // mantener robusto en caso de estado inesperado de la partícula
-                // eslint-disable-next-line no-console
                 console.warn("smoke updateCallback error", err);
             }
         };
@@ -392,7 +476,7 @@ export const addParticleFire = () => {
     ];
 
     for (let i = 0; i < fireData.length; i++) {
-        particleFire(fireData[i][0], fireData[i][1], fireData[i][2]);
+        particleFire(fireData[i][0], fireData[i][1]);
     }
 
     cachedFireLocations.push({ lat: fireData[0][1].toFixed(4), lon: fireData[0][0].toFixed(4), terrain: {}, vegetation: {} });

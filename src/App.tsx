@@ -1,10 +1,15 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import WelcomePage from "./components/WelcomePage.tsx";
 import MainPage from "./components/MainPage.tsx";
+import ConfigValidator from "./components/ui/ConfigValidator.tsx";
+import { ViewContextProvider } from "./contexts/ViewContext.tsx";
 import { useEffect, useState } from "react";
 
-// @ts-ignore
-function ProtectedRoute({ children }: { children: JSX.Element }) {
+interface RouteProps {
+    children: React.ReactNode;
+}
+
+function ProtectedRoute({ children }: RouteProps) {
     const [isAllowed, setIsAllowed] = useState<boolean | null>(null);
 
     useEffect(() => {
@@ -23,8 +28,7 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
     return isAllowed ? children : <Navigate to="/" replace />;
 }
 
-// @ts-ignore
-function PublicRoute({ children }: { children: JSX.Element }) {
+function PublicRoute({ children }: RouteProps) {
     const [hasSession, setHasSession] = useState<boolean | null>(null);
 
     useEffect(() => {
@@ -45,7 +49,9 @@ function PublicRoute({ children }: { children: JSX.Element }) {
 
 export function App() {
     return (
-        <Routes>
+        <ViewContextProvider>
+            <ConfigValidator />
+            <Routes>
             <Route
                 path="/"
                 element={
@@ -66,6 +72,7 @@ export function App() {
 
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </ViewContextProvider>
     );
 }
 

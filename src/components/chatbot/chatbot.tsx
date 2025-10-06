@@ -6,6 +6,7 @@ import ChatMessages from "./chat-messages";
 import ChatInput from "./chat-input";
 import { sendMessage } from "../../api/sendMessage.ts";
 import { getConversations } from "../../api/getConversations.ts";
+import { useViewContext } from "../../hooks/use-view-context";
 
 import type { Message, Conversation, SendMessageResponse } from "../../api/models/message.models.ts";
 import { cachedFireLocations, cachedFireLocationsPredicted } from "../../lib/cesium-fire.ts";
@@ -14,6 +15,7 @@ export default function Chatbot() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+    const viewContext = useViewContext();
 
     useEffect(() => {
         const userId = localStorage.getItem("userId");
@@ -23,7 +25,7 @@ export default function Chatbot() {
                     id: "init",
                     conversationId: "none",
                     sender: "bot",
-                    content: "👋 Welcome! Please log in to load your conversations.",
+                    content: "Welcome to FIRO Fire Assistant! Please log in to access your previous conversations and get personalized wildfire analysis.",
                     createdAt: new Date().toISOString(),
                 },
             ]);
@@ -46,7 +48,7 @@ export default function Chatbot() {
                             id: "init",
                             conversationId: "none",
                             sender: "bot",
-                            content: "Hello! What would you like to discuss today?",
+                            content: "Welcome to FIRO Fire Assistant! I can see what you're viewing on the 3D map and provide context-aware analysis. I can help you understand fire patterns, analyze current fire activity in your view, explain why certain areas might not have fires (like remote regions such as Sicuani, Peru), and provide risk assessments. Try searching for a location and I'll analyze what you see. How can I assist you today?",
                             createdAt: new Date().toISOString(),
                         },
                     ]);
@@ -58,7 +60,7 @@ export default function Chatbot() {
                         id: "error",
                         conversationId: "none",
                         sender: "bot",
-                        content: "❌ Failed to load your conversations.",
+                        content: "Failed to load your conversations.",
                         createdAt: new Date().toISOString(),
                     },
                 ]);
@@ -89,7 +91,8 @@ export default function Chatbot() {
 
     const handleSend = async (text: string) => {
         const jsonFirePoints = JSON.stringify(getCurrentFirePoints());
-        const contentHidden = `\n\nCurrent fire locations (latitude and longitude): ${jsonFirePoints} and predicted fire locations: ${JSON.stringify(getPredictedFirePoints())}.`;
+        const viewContextSummary = viewContext.getContextSummary();
+        const contentHidden = `\n\n${viewContextSummary}\n\nLegacy fire data: ${jsonFirePoints} and predicted fire locations: ${JSON.stringify(getPredictedFirePoints())}.`;
         const userId = localStorage.getItem("userId");
         if (!text.trim() || !userId) return;
 
@@ -136,7 +139,7 @@ export default function Chatbot() {
                     msg.id === "loading"
                         ? {
                             ...msg,
-                            content: "⚠️ Failed to get a response. Try again later.",
+                            content: "Failed to get a response. Try again later.",
                         }
                         : msg
                 )
