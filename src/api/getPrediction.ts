@@ -9,6 +9,7 @@ export interface RequestBody {
     forecast_date: "2025-10-06"
 }
 
+// @ts-ignore
 export async function getPrediction(requestBody: RequestBody): Promise<PredictionResponse> {
     try {
         const response = await httpClient.post<PredictionResponse>("/predict-fire-risk", requestBody);

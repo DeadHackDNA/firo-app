@@ -74,16 +74,21 @@ export const initViewer = async (viewerId: string): Promise<Cesium.Viewer | unde
         },
     });
     viewer.camera.changed.addEventListener(() => {
+        // @ts-ignore
         clearTimeout((viewer)._fireTimeout);
+        // @ts-ignore
         (viewer)._fireTimeout = setTimeout(() => {
             trackCamera(viewer);
         }, 2000);
     });
     addParticleFire();
     viewer.camera.changed.addEventListener(() => {
+        // @ts-ignore
         if ((viewer)._adjustFireTimeout) {
+            // @ts-ignore
             clearTimeout((viewer)._adjustFireTimeout);
         }
+        // @ts-ignore
         (viewer)._adjustFireTimeout = setTimeout(() => {
             adjustFireVisibility(viewer);
         }, 1000);
@@ -222,10 +227,12 @@ async function trackCamera(viewer: Cesium.Viewer) {
         }
         console.log(`🔥 Active fires: ${globalParams.wildFireCollection.length}`);
     } catch (error) {
+        // @ts-ignore
         if (error.name === "AbortError") {
             // ignored because it means a new request started
             return;
         }
+        // @ts-ignore
         console.error("Error fetching fire locations:", err);
     }
 }

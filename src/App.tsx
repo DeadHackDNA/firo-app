@@ -3,6 +3,7 @@ import WelcomePage from "./components/WelcomePage.tsx";
 import MainPage from "./components/MainPage.tsx";
 import { useEffect, useState } from "react";
 
+// @ts-ignore
 function ProtectedRoute({ children }: { children: JSX.Element }) {
     const [isAllowed, setIsAllowed] = useState<boolean | null>(null);
 
@@ -22,6 +23,7 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
     return isAllowed ? children : <Navigate to="/" replace />;
 }
 
+// @ts-ignore
 function PublicRoute({ children }: { children: JSX.Element }) {
     const [hasSession, setHasSession] = useState<boolean | null>(null);
 

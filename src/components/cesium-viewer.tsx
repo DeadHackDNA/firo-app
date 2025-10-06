@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { globalParams, initFire, initViewer } from "../lib/cesium-fire";
 import { motion } from "framer-motion";
+import DateRangeSelect from "./ui/DateRangeSelect.tsx";
 
 export default function CesiumViewer() {
     const [itsMounted, setItsMounted] = useState(false);
@@ -36,15 +37,14 @@ export default function CesiumViewer() {
             id="cesiumContainer"
             className="relative w-full h-full bg-gradient-to-br from-gray-900 via-gray-800 to-black shadow-2xl rounded-xl overflow-hidden border border-gray-700">
             <div className="absolute top-4 left-4 flex flex-col gap-2 z-50">
-<<<<<<< HEAD
                 <div className="d-flex">
                     <div className="flex flex-col gap-2">
                         <div>
-                            <DateRangeSelect onRangeChange={() => { console.log("sadjads") }} />
+                            <DateRangeSelect onRangeChange={() => { console.log("") }} />
                         </div>
                         <div className="bg-black/60 text-white text-sm px-3 py-1 rounded-md backdrop-blur-md shadow-lg">
                             <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noopener noreferrer" className="hover:underline">
-                                🚀 Data Source: NASA FIRo
+                                🚀 Data Source: NASA FIRM
                             </a>
                         </div>
                         <div className="bg-black/60 text-white text-sm px-3 py-1 rounded-md backdrop-blur-md shadow-lg">
@@ -63,10 +63,6 @@ export default function CesiumViewer() {
                             Interact with the map to predict fire
                         </p>
                     </div>
-=======
-                <div className="bg-black/60 text-white text-sm px-3 py-1 rounded-md backdrop-blur-md shadow-lg">
-                    🌍 Cesium Viewer
->>>>>>> 1acf2b5cb453be75353b06a17576a96f01623e68
                 </div>
             </div>
             <motion.div
