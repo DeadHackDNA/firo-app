@@ -13,7 +13,7 @@ export default function CesiumViewer() {
       (async () => {
           try {
               if (!itsMounted) return;
-              await initViewer("cesiumContainer", range);
+              await initViewer("cesiumContainer");
           } catch (err) {
               console.error("Error initializing Cesium:", err);
           }

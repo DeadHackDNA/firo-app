@@ -38,7 +38,7 @@ function addFirePoint(viewer: Cesium.Viewer, lon: number, lat: number, color: Ce
     globalParams.wildFirePoints.push(pointEntity);
 }
 
-export const initViewer = async (viewerId: string, dateRange:string): Promise<Cesium.Viewer | undefined> => {
+export const initViewer = async (viewerId: string): Promise<Cesium.Viewer | undefined> => {
     Cesium.Ion.defaultAccessToken = (import.meta).env?.VITE_CESIUM_TOKEN ?? "";
 
     const viewer = new Cesium.Viewer(viewerId, {
@@ -64,17 +64,17 @@ export const initViewer = async (viewerId: string, dateRange:string): Promise<Ce
         },
     });
     viewer.camera.changed.addEventListener(() => {
-        clearTimeout((viewer as any)._fireTimeout);
-        (viewer as any)._fireTimeout = setTimeout(() => {
-            trackCamera(viewer, dateRange);
+        clearTimeout((viewer)._fireTimeout);
+        (viewer)._fireTimeout = setTimeout(() => {
+            trackCamera(viewer);
         }, 2000);
     });
     addParticleFire();
     viewer.camera.changed.addEventListener(() => {
-        if ((viewer as any)._adjustFireTimeout) {
-            clearTimeout((viewer as any)._adjustFireTimeout);
+        if ((viewer)._adjustFireTimeout) {
+            clearTimeout((viewer)._adjustFireTimeout);
         }
-        (viewer as any)._adjustFireTimeout = setTimeout(() => {
+        (viewer)._adjustFireTimeout = setTimeout(() => {
             adjustFireVisibility(viewer);
         }, 1000);
     });
@@ -84,7 +84,7 @@ export const initViewer = async (viewerId: string, dateRange:string): Promise<Ce
 let lastCameraPosition: Cesium.Cartesian3 | null = null;
 let lastFetchAbort: AbortController | null = null;
 
-async function trackCamera(viewer: Cesium.Viewer, dateRange: string) {
+async function trackCamera(viewer: Cesium.Viewer) {
     const scene = viewer.scene;
     const camera = viewer.camera;
     const globe = scene.globe;
@@ -119,7 +119,7 @@ async function trackCamera(viewer: Cesium.Viewer, dateRange: string) {
     const east = Cesium.Math.toDegrees(bottomRightCarton.longitude);
 
     const requestBody =
-        buildFireLocationsRequestBody(dateRange, south, north, west, east);
+        buildFireLocationsRequestBody("", south, north, west, east);
 
     console.log("Requesting fires within:", requestBody);
 
@@ -361,12 +361,12 @@ function buildFireLocationsRequestBody(
             end = getISODate(0);
             break;
         case "custom":
-            start = "2023-10-01T00:00:00Z";
-            end = "2023-10-31T23:59:59Z";
+            start = "2025-01-01T00:00:00Z";
+            end = "2025-10-05T23:59:59Z";
             break;
         default:
-            start = getISODate(1);
-            end = getISODate(0);
+            start = "2025-01-01";
+            end = "2025-10-05";
     }
     return {
         start,
