@@ -1,94 +1,83 @@
-import { useEffect } from "react";
-// @ts-ignore
-import * as Cesium from "cesium";
+import { useEffect, useState } from "react";
+import { globalParams, initFire, initViewer } from "../lib/cesium-fire";
+import { motion } from "framer-motion";
+import DateRangeSelect from "./ui/DateRangeSelect.tsx";
 
 export default function CesiumViewer() {
-  useEffect(() => {
-    Cesium.Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
+    const [itsMounted, setItsMounted] = useState(false);
 
-    // Crear viewer
-    const viewer = new Cesium.Viewer("cesiumContainer", {
-      shouldAnimate: true,
-    });
+    useEffect(() => {
+        setItsMounted(true);
+    }, []);
 
-    // Seed fijo para random
-    Cesium.Math.setRandomNumberSeed(3);
+    useEffect(() => {
+        (async () => {
+            try {
+                if (!itsMounted) return;
+                await initViewer("cesiumContainer");
+            } catch (err) {
+                console.error("Error initializing Cesium:", err);
+            }
+        })();
 
-    // Tiempo de simulación
-    const start = Cesium.JulianDate.fromDate(new Date(2015, 2, 25, 16));
-    const stop = Cesium.JulianDate.addSeconds(start, 120, new Cesium.JulianDate());
+        return () => {
+            try {
+                initFire();
+            } catch (e) {
+                console.warn("initFire error:", e);
+            }
+            if (globalParams.viewer && !globalParams.viewer.isDestroyed()) {
+                globalParams.viewer.destroy();
+            }
+        };
+    }, [itsMounted]);
 
-    viewer.clock.startTime = start.clone();
-    viewer.clock.stopTime = stop.clone();
-    viewer.clock.currentTime = start.clone();
-    viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
-    viewer.clock.multiplier = 1;
-    viewer.clock.shouldAnimate = true;
-
-    viewer.timeline.zoomTo(start, stop);
-
-    // Definir posiciones de un modelo (milk truck)
-    const pos1 = Cesium.Cartesian3.fromDegrees(-75.15787310614596, 39.97862668312678);
-    const pos2 = Cesium.Cartesian3.fromDegrees(-75.1633691390455, 39.95355089912078);
-    const position = new Cesium.SampledPositionProperty();
-    position.addSample(start, pos1);
-    position.addSample(stop, pos2);
-
-    const entity = viewer.entities.add({
-      availability: new Cesium.TimeIntervalCollection([
-        new Cesium.TimeInterval({ start, stop }),
-      ]),
-      model: {
-        uri: "/fire.blend",
-        minimumPixelSize: 64,
-      },
-      viewFrom: new Cesium.Cartesian3(-100.0, 0.0, 100.0),
-      position,
-      orientation: new Cesium.VelocityOrientationProperty(position),
-    });
-
-    viewer.trackedEntity = entity;
-
-    // Particle system
-    const scene = viewer.scene;
-    const particleSystem = scene.primitives.add(
-      new Cesium.ParticleSystem({
-        image: "/smoke.png", // 👈 pon la textura en public/
-        startColor: Cesium.Color.LIGHTSEAGREEN.withAlpha(0.7),
-        endColor: Cesium.Color.WHITE.withAlpha(0.0),
-        startScale: 1.0,
-        endScale: 5.0,
-        minimumParticleLife: 1.2,
-        maximumParticleLife: 1.2,
-        minimumSpeed: 1.0,
-        maximumSpeed: 4.0,
-        imageSize: new Cesium.Cartesian2(25, 25),
-        emissionRate: 5.0,
-        lifetime: 16.0,
-        emitter: new Cesium.CircleEmitter(2.0),
-        updateCallback: applyGravity,
-      })
+    return (
+        <div
+            id="cesiumContainer"
+            className="relative w-full h-full bg-gradient-to-br from-gray-900 via-gray-800 to-black shadow-2xl rounded-xl overflow-hidden border border-gray-700">
+            <div className="absolute top-4 left-4 flex flex-col gap-2 z-50">
+                <div className="d-flex">
+                    <div className="flex flex-col gap-2">
+                        <div>
+                            <DateRangeSelect onRangeChange={() => { console.log("") }} />
+                        </div>
+                        <div className="bg-black/60 text-white text-sm px-3 py-1 rounded-md backdrop-blur-md shadow-lg">
+                            <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                🚀 Data Source: NASA FIRM
+                            </a>
+                        </div>
+                        <div className="bg-black/60 text-white text-sm px-3 py-1 rounded-md backdrop-blur-md shadow-lg">
+                            <a href="https://github.com/DeadHackDNA/" target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                🚀 Team
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div className="absolute top-4 right-4 flex flex-col gap-2 z-50">
+                <div className="">
+                    <div className="flex items-center justify-center text-white">
+                        {/* <div className="w-5 h-6 border-4 border-blue-500 border-t-transparent rounded-full animate-spin px-2"></div> */}
+                        <p className="px-2 text-lg font-semibold text-blue-200 animate-pulse">
+                            Interact with the map to predict fire
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <motion.div
+                initial={{ opacity: 1 }}
+                animate={{ opacity: 0 }}
+                transition={{ delay: 1.5, duration: 0.6 }}
+                className="absolute inset-0 flex items-center justify-center text-white text-lg font-semibold bg-black/50 backdrop-blur-sm"
+            >
+                <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 1.2, ease: 'linear' }}
+                    className="w-8 h-8 border-4 border-white border-t-transparent rounded-full"
+                />
+                <span className="ml-3">Loading map...</span>
+            </motion.div>
+        </div>
     );
-
-    const gravityScratch = new Cesium.Cartesian3();
-    function applyGravity(p: any, dt: number) {
-      const position = p.position;
-      Cesium.Cartesian3.normalize(position, gravityScratch);
-      Cesium.Cartesian3.multiplyByScalar(gravityScratch, 0.0 * dt, gravityScratch);
-      p.velocity = Cesium.Cartesian3.add(p.velocity, gravityScratch, p.velocity);
-    }
-
-    // Actualizar partículas cada frame
-    viewer.scene.preUpdate.addEventListener(function (scene, time) {
-      if (entity) {
-        particleSystem.modelMatrix = entity.computeModelMatrix(time, new Cesium.Matrix4());
-      }
-    });
-
-    return () => {
-      viewer.destroy();
-    };
-  }, []);
-
-  return <div id="cesiumContainer" style={{ width: "100%", height: "100vh" }} />;
 }
