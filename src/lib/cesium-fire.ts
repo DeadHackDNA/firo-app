@@ -171,7 +171,7 @@ async function trackCamera(viewer: Cesium.Viewer) {
 
             if (!exists) {
                 // Mantener un máximo de 100 incendios activos
-                if (globalParams.wildFireCollection.length >= 100) {
+                if (globalParams.wildFireCollection.length >= 22) {
                     const oldFire = globalParams.wildFireCollection.shift();
                     const oldSmoke = globalParams.smokeCollection.shift();
                     if (oldFire) viewerScene.primitives.remove(oldFire);
@@ -207,8 +207,8 @@ async function trackCamera(viewer: Cesium.Viewer) {
             });
 
             if (!exists) {
-                // Maintain a max of 100 active fires
-                if (globalParams.wildFireCollection.length >= 100) {
+                // Maintain a max of 22 active fires
+                if (globalParams.wildFireCollection.length >= 22) {
                     const oldFire = globalParams.wildFireCollection.shift();
                     const oldSmoke = globalParams.smokeCollection.shift();
                     if (oldFire) viewerScene.primitives.remove(oldFire);
