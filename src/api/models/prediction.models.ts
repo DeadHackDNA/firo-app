@@ -23,6 +23,7 @@ export interface PredictionDetail {
 }
 
 export interface PredictionResponse {
-    analysis_metadata: PredictionAnalysis,
-    detailed_predictions: PredictionDetail[];
+    risk_grid: any[]
+    recommendations: any[]
+    fire_risk_assessment: any[]
 }

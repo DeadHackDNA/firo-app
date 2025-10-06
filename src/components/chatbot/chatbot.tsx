@@ -4,10 +4,11 @@ import { Card, CardContent } from "../ui/card";
 import ChatHeader from "./chat-header";
 import ChatMessages from "./chat-messages";
 import ChatInput from "./chat-input";
-import { sendMessage} from "../../api/sendMessage.ts";
+import { sendMessage } from "../../api/sendMessage.ts";
 import { getConversations } from "../../api/getConversations.ts";
 
-import type {Message, Conversation, SendMessageResponse} from "../../api/models/message.models.ts";
+import type { Message, Conversation, SendMessageResponse } from "../../api/models/message.models.ts";
+import { cachedFireLocations } from "../../lib/cesium-fire.ts";
 
 export default function Chatbot() {
     const [messages, setMessages] = useState<Message[]>([]);
@@ -68,7 +69,18 @@ export default function Chatbot() {
         fetchConversations().then();
     }, []);
 
+    const getCurrentFirePoints = () => {
+        const firePoints: { lat: number, lon: number }[] = cachedFireLocations.map((fire) => {
+            const lat = parseFloat(fire.lat);
+            const lon = parseFloat(fire.lon);
+            return { lat, lon };
+        });
+        return firePoints;
+    }
+
     const handleSend = async (text: string) => {
+        const jsonFirePoints = JSON.stringify(getCurrentFirePoints());
+        const contentHidden = `\n\nCurrent fire locations (latitude and longitude): ${jsonFirePoints}`;
         const userId = localStorage.getItem("userId");
         if (!text.trim() || !userId) return;
 
@@ -92,7 +104,7 @@ export default function Chatbot() {
         setMessages((prev) => [...prev, loadingMessage]);
 
         try {
-            const response: SendMessageResponse = await sendMessage(userId, text);
+            const response: SendMessageResponse = await sendMessage(userId, text, contentHidden);
             const botMessage = response.botMessage;
 
             setMessages((prev) =>
@@ -143,7 +155,7 @@ export default function Chatbot() {
                 <CardContent className="flex flex-col h-full p-0 rounded-xl overflow-hidden">
                     <ChatHeader />
                     <ChatMessages messages={messages} />
-                    <ChatInput onSend={handleSend}/>
+                    <ChatInput onSend={handleSend} />
                 </CardContent>
             </Card>
         </motion.div>

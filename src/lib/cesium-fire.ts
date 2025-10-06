@@ -8,7 +8,6 @@ export const globalParams: {
     wildFireCollection: Cesium.ParticleSystem[];
     wildFirePoints: Cesium.Entity[];
     smokeCollection: Cesium.ParticleSystem[];
-
 } = {
     viewer: undefined,
     fireByDataSourcePromise: undefined,
@@ -16,6 +15,8 @@ export const globalParams: {
     wildFirePoints: [],
     smokeCollection: [],
 };
+
+export const cachedFireLocations: { lat: string, lon: string }[] = [];
 
 function clearFirePoints(viewer: Cesium.Viewer) {
     for (const point of globalParams.wildFirePoints) {
@@ -136,6 +137,7 @@ async function trackCamera(viewer: Cesium.Viewer) {
         forecast_date: "2025-10-06"
     };
 
+
     try {
         const [fireLocations, predictions] = await Promise.all([
             getFireLocations(requestBody),
@@ -167,18 +169,25 @@ async function trackCamera(viewer: Cesium.Viewer) {
                 }
                 particleFire(fire.longitude, fire.latitude, fire.elevation || 0);
                 adjustFireVisibility(viewer, Cesium.Color.BLUE);
+                cachedFireLocations.push({ lat: fire.latitude.toFixed(4), lon: fire.longitude.toFixed(4) });
+                if (cachedFireLocations.length > 50) {
+                    cachedFireLocations.shift(); // mantener solo las últimas 50 ubicaciones
+                }
             }
         }
 
-        for (const fire of predictions.detailed_predictions) {
+        let count = 0;
+        for (const fire of predictions.risk_grid) {
+            if (count >= 2) break; // limitar a 2 predicciones por llamada
+            count++;
             const exists = globalParams.wildFireCollection.some((pf) => {
                 const pos = Cesium.Matrix4.getTranslation(pf.modelMatrix, new Cesium.Cartesian3());
                 const carto = Cesium.Cartographic.fromCartesian(pos);
                 const lon = Cesium.Math.toDegrees(carto.longitude);
                 const lat = Cesium.Math.toDegrees(carto.latitude);
                 return (
-                    Math.abs(lon - fire.longitude) < 0.0001 &&
-                    Math.abs(lat - fire.latitude) < 0.0001
+                    Math.abs(lon - fire.lon) < 0.0001 &&
+                    Math.abs(lat - fire.lat) < 0.0001
                 );
             });
 
@@ -190,10 +199,15 @@ async function trackCamera(viewer: Cesium.Viewer) {
                     if (oldFire) viewerScene.primitives.remove(oldFire);
                     if (oldSmoke) viewerScene.primitives.remove(oldSmoke);
                 }
-                particleFire(fire.longitude, fire.latitude, fire.elevation || 0);
+                particleFire(fire.lon, fire.lat, fire.elevation || 0);
                 adjustFireVisibility(viewer, Cesium.Color.RED);
+                cachedFireLocations.push({ lat: fire.lat.toFixed(4), lon: fire.lon.toFixed(4) });
+                if (cachedFireLocations.length > 50) {
+                    cachedFireLocations.shift(); // mantener solo las últimas 50 ubicaciones
+                }
             }
         }
+
 
         console.log(`🔥 Active fires: ${globalParams.wildFireCollection.length}`);
     } catch (err: any) {
