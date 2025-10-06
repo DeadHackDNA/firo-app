@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { globalParams, initFire, initViewer } from "../lib/cesium-fire";
 import { motion } from "framer-motion";
-import DateRangeSelect from "./ui/DateRangeSelect.tsx";
 
 export default function CesiumViewer() {
     const [itsMounted, setItsMounted] = useState(false);
@@ -37,7 +36,6 @@ export default function CesiumViewer() {
             id="cesiumContainer"
             className="relative w-full h-full bg-gradient-to-br from-gray-900 via-gray-800 to-black shadow-2xl rounded-xl overflow-hidden border border-gray-700">
             <div className="absolute top-4 left-4 flex flex-col gap-2 z-50">
-                <DateRangeSelect onRangeChange={() => {console.log("sadjads")}} />
                 <div className="bg-black/60 text-white text-sm px-3 py-1 rounded-md backdrop-blur-md shadow-lg">
                     🌍 Cesium Viewer
                 </div>
